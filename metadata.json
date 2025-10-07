@@ -1,0 +1,5 @@
+{
+  "name": "Roleplay Nexus v4.4",
+  "description": "An advanced AI roleplaying chat application that allows users to create, edit, and chat with customizable characters. It supports multiple external LLM providers like Google Gemini, OpenRouter, and DeepSeek, powered by user-provided API keys for a personalized experience.",
+  "requestFramePermissions": []
+}

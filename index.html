@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎭</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roleplay Nexus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Exo+2:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Exo 2', 'sans-serif'],
+              display: ['Orbitron', 'sans-serif'],
+            },
+            colors: {
+              slate: {
+                950: '#060810',
+                900: '#0F121E',
+                800: '#1A2033',
+                700: '#343E58',
+                600: '#4D5A7A',
+                500: '#7C89A9',
+                400: '#96A3C2',
+                300: '#C2CDE2',
+                200: '#E1E7F2',
+                100: '#F0F3F9',
+              },
+              sky: {
+                ...tailwind.theme.colors.sky,
+                400: '#38bdf8', // Light blue for glows
+                500: '#0ea5e9', // Main interactive blue
+                600: '#0284c7', // Darker interactive blue
+              },
+              fuchsia: {
+                ...tailwind.theme.colors.fuchsia,
+                500: '#d946ef',
+                600: '#c026d3',
+              },
+              indigo: {
+                500: '#6366f1',
+                600: '#4f46e5',
+              }
+            },
+            keyframes: {
+              'fade-in': {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              'slide-up': {
+                '0%': { transform: 'translateY(20px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              },
+              'message-in': {
+                '0%': { transform: 'translateY(20px) scale(0.98)', opacity: '0' },
+                '100%': { transform: 'translateY(0) scale(1)', opacity: '1' },
+              },
+              'pulse-glow': {
+                '0%, 100%': { boxShadow: '0 0 12px 2px rgba(2, 132, 199, 0.4)' }, /* sky-600 */
+                '50%': { boxShadow: '0 0 20px 5px rgba(2, 132, 199, 0.2)' },
+              },
+               'hex-bg-pan': {
+                '0%': { background-position: '0% 0%' },
+                '100%': { background-position: '100% 100%' },
+              }
+            },
+            animation: {
+              'fade-in': 'fade-in 0.3s ease-out forwards',
+              'slide-up': 'slide-up 0.4s ease-out forwards',
+              'message-in': 'message-in 0.4s ease-out forwards',
+              'pulse-glow': 'pulse-glow 3s infinite ease-in-out',
+              'hex-bg-pan': 'hex-bg-pan 120s linear infinite',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        overflow: hidden; /* Prevent page-level scrollbars */
+      }
+      ::selection {
+        background-color: #c026d3; /* fuchsia-600 */
+        color: #F0F3F9; /* slate-100 */
+      }
+      /* Custom scrollbar to match gaming theme */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #0F121E; /* slate-900 */
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: #343E58; /* slate-700 */
+        border-radius: 4px;
+        border: 2px solid #0F121E;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: #4D5A7A; /* slate-600 */
+      }
+
+      /* Gaming Theme Background */
+      .bg-gaming-pattern {
+        background-color: #060810;
+        background-image:
+          radial-gradient(circle at center, rgba(14, 165, 233, 0.08) 0%, transparent 40%),
+          url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><g fill="%230F121E"><path d="M0 0h80v80H0z" fill-opacity="1"/><path d="M20 20h20v20H20zM60 20h20v20H60zM20 60h20v20H20zM60 60h20v20H60z" fill-opacity="0.5"/><path d="M10 10h10v10H10zM50 10h10v10H50zM10 50h10v10H10zM50 50h10v10H50z" fill-opacity="0.3"/></g></svg>');
+        animation: hex-bg-pan 120s linear infinite;
+      }
+
+      /* Card glow effect */
+      .card-glow {
+        position: relative;
+        border: 1px solid #1A2033;
+      }
+      .card-glow:before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px; /* border width */
+        background: radial-gradient(300px at var(--x) var(--y), rgba(14, 165, 233, 0.3), transparent 80%);
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+      }
+      .card-glow:hover:before {
+        opacity: 1;
+      }
+
+      /* Hexagonal shape for avatars */
+      .shape-hexagon {
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      }
+
+      /* Chat bubble tails */
+      .chat-bubble-left::after {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: -8px;
+        width: 0;
+        height: 0;
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+        border-right: 8px solid #1A2033; /* slate-800 */
+      }
+
+      .chat-bubble-right::after {
+        content: '';
+        position: absolute;
+        top: 14px;
+        right: -8px;
+        width: 0;
+        height: 0;
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+        border-left: 8px solid #6366f1; /* indigo-500, matches start of user gradient */
+      }
+      
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-slate-950 text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
