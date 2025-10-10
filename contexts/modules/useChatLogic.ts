@@ -158,7 +158,8 @@ export const useChatLogic = ({
         world: worlds.find(w => w.id === session.worldId), 
         temperature: session.temperature ?? settings.temperature,
         prefill, signal: controller.signal, 
-        reasoningEnabled: session.reasoningEnabled ?? settings.reasoningEnabled,
+        // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+        thinkingEnabled: session.thinkingEnabled ?? settings.thinkingEnabled,
         contextSize: session.contextSize ?? settings.contextSize, 
         maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens,
         memorySummary: updatedSummary,
@@ -234,7 +235,8 @@ export const useChatLogic = ({
             world: worlds.find(w => w.id === session.worldId),
             temperature: session.temperature ?? settings.temperature, 
             prefill: settings.responsePrefill, signal: controller.signal,
-            reasoningEnabled: session.reasoningEnabled ?? settings.reasoningEnabled, 
+            // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+            thinkingEnabled: session.thinkingEnabled ?? settings.thinkingEnabled, 
             contextSize: session.contextSize ?? settings.contextSize,
             maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens,
             memorySummary: updatedSummary,

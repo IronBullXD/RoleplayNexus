@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, LLMProvider } from '../types';
 import { Icon } from './Icon';
 import { DEFAULT_SETTINGS } from '../constants';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -57,12 +57,13 @@ const ProviderConfig: React.FC<{ provider: LLMProvider; settings: Settings; setS
             <summary className="text-md font-semibold text-slate-200 cursor-pointer list-none flex justify-between items-center font-display tracking-wider">{provider}<Icon name="add" className="w-5 h-5 text-slate-400 group-open:rotate-45 transition-transform" /></summary>
             <div className="mt-4 space-y-4 border-t border-slate-700/50 pt-4">
                  <p className="text-sm text-slate-400">{info.description} {!isGemini && <a href={info.keyLink} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline"> Get your key here.</a>}</p>
-                 <FormField label="API Key" htmlFor={`${provider}-key`}>
-                    <input type="password" id={`${provider}-key`} value={settings.apiKeys[provider]} onChange={(e) => setSettings(p => ({ ...p, apiKeys: { ...p.apiKeys, [provider]: e.target.value } }))} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed placeholder:text-slate-600" placeholder={isGemini ? "Using pre-configured key" : "Enter your API key"} disabled={isGemini} />
-                </FormField>
+                 {!isGemini && (
+                    <FormField label="API Key" htmlFor={`${provider}-key`}>
+                        <input type="password" id={`${provider}-key`} value={settings.apiKeys[provider]} onChange={(e) => setSettings(p => ({ ...p, apiKeys: { ...p.apiKeys, [provider]: e.target.value } }))} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600" placeholder="Enter your API key" />
+                    </FormField>
+                 )}
                 <FormField label="Model Name" htmlFor={`${provider}-model`}>
-{/* FIX: Updated placeholder text to reflect the recommended 'gemini-2.5-flash' model. */}
-                     <input type="text" id={`${provider}-model`} value={settings.models?.[provider] || ''} onChange={(e) => setSettings(p => ({ ...p, models: { ...p.models, [provider]: e.target.value } }))} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600" placeholder="e.g., gemini-2.5-flash" required />
+                     <input type="text" id={`${provider}-model`} value={settings.models?.[provider] || ''} onChange={(e) => setSettings(p => ({ ...p, models: { ...p.models, [provider]: e.target.value } }))} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600" placeholder={isGemini ? 'e.g., gemini-2.5-flash' : 'e.g., gryphe/mythomax-l2-13b'} required />
                 </FormField>
             </div>
         </details>
@@ -87,7 +88,7 @@ const PromptsSection: React.FC<{ settings: Settings; setSettings: React.Dispatch
 );
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { settings: currentSettings, saveSettings } = useAppContext();
+  const { settings: currentSettings, saveSettings } = useAppStore();
   const [settings, setSettings] = useState<Settings>(currentSettings);
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   

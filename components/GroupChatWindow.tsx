@@ -5,12 +5,13 @@ import SimpleMarkdown from './SimpleMarkdown';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import Avatar from './Avatar';
 import ChatSettingsPopover from './ChatSettingsPopover';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
+import { usePaginatedMessages } from '../hooks/usePaginatedMessages';
 
 interface GroupChatWindowProps {}
 
-const ReasoningModal: React.FC<{ isOpen: boolean; onClose: () => void; reasoning: string; }> = ({ isOpen, onClose, reasoning }) => {
+const ThinkingModal: React.FC<{ isOpen: boolean; onClose: () => void; thinking: string; }> = ({ isOpen, onClose, thinking }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     if (isOpen) {
@@ -33,7 +34,7 @@ const ReasoningModal: React.FC<{ isOpen: boolean; onClose: () => void; reasoning
         </header>
         <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           <pre className="text-slate-300 whitespace-pre-wrap font-mono text-sm leading-relaxed">
-            {reasoning}
+            {thinking}
           </pre>
         </main>
         <footer className="p-4 border-t border-slate-800 flex justify-end shrink-0">
@@ -79,10 +80,10 @@ interface EditableGroupChatMessageProps {
     onStartEdit: (message: Message) => void;
     onSaveEdit: () => void;
     onCancelEdit: () => void;
-    onShowReasoning: (reasoning: string) => void;
+    onShowThinking: (thinking: string) => void;
 }
 
-const EditableGroupChatMessage: React.FC<EditableGroupChatMessageProps> = ({ message, characterMap, userPersona, isLastMessage, isLoading, onDelete, onRegenerate, onFork, isEditing, editingText, onSetEditingText, onStartEdit, onSaveEdit, onCancelEdit, onShowReasoning }) => {
+const EditableGroupChatMessage: React.FC<EditableGroupChatMessageProps> = ({ message, characterMap, userPersona, isLastMessage, isLoading, onDelete, onRegenerate, onFork, isEditing, editingText, onSetEditingText, onStartEdit, onSaveEdit, onCancelEdit, onShowThinking }) => {
     if (message.role === 'system') {
         return <SystemMessage message={message} />;
     }
@@ -131,7 +132,7 @@ const EditableGroupChatMessage: React.FC<EditableGroupChatMessageProps> = ({ mes
                 }`}>
                     {!isEditing && (
                         <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-slate-900/50 backdrop-blur-sm p-1 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                            {!isUser && message.reasoning && <ActionButton icon="brain" label="Show Reasoning" onClick={() => onShowReasoning(message.reasoning!)} />}
+                            {!isUser && message.thinking && <ActionButton icon="brain" label="Show Thinking" onClick={() => onShowThinking(message.thinking!)} />}
                             <ActionButton icon="fork" label="Fork Chat" onClick={() => onFork(message.id)} />
                             <ActionButton icon="delete" label="Delete Message" onClick={() => onDelete(message.id)} />
                             <ActionButton icon="edit" label="Edit Message" onClick={() => onStartEdit(message)} />
@@ -163,22 +164,32 @@ const TypingIndicator: React.FC = () => (
 );
 
 const GroupChatWindow: React.FC<GroupChatWindowProps> = () => {
+  const store = useAppStore();
   const { 
-    activeGroupSession: session, characters, userPersona, sendGroupMessage, editGroupMessage, deleteGroupMessage, regenerateGroupResponse, continueGroupGeneration, 
-    forkGroupChat, stopGeneration, isLoading, error, setCurrentView, worlds, settings,
-    setWorld, setTemperature, setReasoningEnabled, setContextSize, setMaxOutputTokens, setMemoryEnabled
-  } = useAppContext();
+    activeGroupSessionId, groupConversations, characters, userPersona, settings, worlds,
+  } = store;
+
+  const session = useMemo(() => groupConversations[activeGroupSessionId || ''] || null, [groupConversations, activeGroupSessionId]);
+  
+  const isLoading = useAppStore(state => state.isLoading);
+  const error = useAppStore(state => state.error);
 
   const [input, setInput] = useState('');
-  const [reasoningForModal, setReasoningForModal] = useState<string | null>(null);
+  const [thinkingForModal, setThinkingForModal] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { editingMessageId, editingText, setEditingText, startEditing, saveEdit, cancelEdit } = useMessageEditing(editGroupMessage);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  const { editingMessageId, editingText, setEditingText, startEditing, saveEdit, cancelEdit } = useMessageEditing(store.editGroupMessage);
 
-  const characterMap = useMemo(() => new Map(characters.map(c => [c.id, c])), [characters]);
+  const messages = session?.messages || [];
+  const { displayedMessages, hasMore, loadMore } = usePaginatedMessages(messages, scrollContainerRef);
+
+  // FIX: Added an explicit type for the 'c' parameter in the map function to correctly type the resulting Map.
+  const characterMap: Map<string, Character> = useMemo(() => new Map(characters.map((c: Character) => [c.id, c])), [characters]);
   const tokenCount = useMemo(() => Math.ceil((session?.messages || []).reduce((sum, msg) => sum + msg.content.length, 0) / 4), [session?.messages]);
   
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [session?.messages, isLoading]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); }, [session?.messages, isLoading]);
   useEffect(() => {
     if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -188,8 +199,8 @@ const GroupChatWindow: React.FC<GroupChatWindowProps> = () => {
 
   const handleAction = () => {
     if (isLoading) return;
-    if (input.trim()) { sendGroupMessage(input.trim()); setInput(''); } 
-    else if (session?.messages.length > 0) { continueGroupGeneration(); }
+    if (input.trim()) { store.sendGroupMessage(input.trim()); setInput(''); } 
+    else if (session?.messages.length > 0) { store.continueGroupGeneration(); }
   };
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); handleAction(); };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAction(); } };
@@ -206,13 +217,13 @@ const GroupChatWindow: React.FC<GroupChatWindowProps> = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-slate-900 h-screen">
-        <ReasoningModal
-          isOpen={!!reasoningForModal}
-          onClose={() => setReasoningForModal(null)}
-          reasoning={reasoningForModal || ''}
+        <ThinkingModal
+          isOpen={!!thinkingForModal}
+          onClose={() => setThinkingForModal(null)}
+          thinking={thinkingForModal || ''}
         />
         <header className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-950/70 backdrop-blur-sm z-10 shrink-0 shadow-lg">
-            <IconButton icon="arrow-left" label="Back to Characters" onClick={() => setCurrentView('CHARACTER_SELECTION')} />
+            <IconButton icon="arrow-left" label="Back to Characters" onClick={() => store.setCurrentView('CHARACTER_SELECTION')} />
             <div className="flex items-center gap-3 overflow-hidden min-w-0">
                 <div className="flex -space-x-5 shrink-0">
                     {avatarSlice.map(char => <Avatar key={char.id} src={char.avatar} alt={char.name} shape="square" className="w-10 h-10 border-2 border-slate-950" />)}
@@ -224,29 +235,38 @@ const GroupChatWindow: React.FC<GroupChatWindowProps> = () => {
                     settings={{
                         worldId: session.worldId ?? null,
                         temperature: session.temperature ?? settings.temperature,
-                        reasoningEnabled: session.reasoningEnabled ?? settings.reasoningEnabled,
+                        thinkingEnabled: session.thinkingEnabled ?? settings.thinkingEnabled,
                         contextSize: session.contextSize ?? settings.contextSize,
                         maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens,
                         memoryEnabled: session.memoryEnabled ?? false,
+                        promptAdherence: session.promptAdherence ?? settings.promptAdherence,
                     }} 
                     worlds={worlds} 
-                    onSetWorld={setWorld} 
-                    onSetTemperature={setTemperature} 
-                    onSetReasoningEnabled={setReasoningEnabled} 
-                    onSetContextSize={setContextSize} 
-                    onSetMaxOutputTokens={setMaxOutputTokens}
-                    onSetMemoryEnabled={setMemoryEnabled}
+                    onSetWorld={store.setWorld} 
+                    onSetTemperature={store.setTemperature} 
+                    onSetThinkingEnabled={store.setThinkingEnabled} 
+                    onSetContextSize={store.setContextSize} 
+                    onSetMaxOutputTokens={store.setMaxOutputTokens}
+                    onSetMemoryEnabled={store.setMemoryEnabled}
+                    onSetPromptAdherence={store.setPromptAdherence}
                 />
             </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="max-w-4xl w-full mx-auto px-4 md:px-5">
                 <div className="my-6 p-5 bg-slate-800/50 rounded-lg border border-slate-700 flex gap-4 items-start"><Icon name="book-open" className="w-6 h-6 text-slate-400 shrink-0 mt-1" /><div><h3 className="font-bold text-slate-200 font-display tracking-wider">SCENARIO</h3><p className="text-sm text-slate-300 mt-1 whitespace-pre-wrap">{session.scenario}</p></div></div>
-                {session.messages.map((msg, index) => (
+                {hasMore && (
+                    <div className="text-center my-4 animate-fade-in">
+                        <button onClick={loadMore} className="px-4 py-2 text-sm font-semibold text-sky-300 bg-sky-900/50 border border-sky-700/70 rounded-full hover:bg-sky-800/50 transition-colors shadow-inner shadow-sky-900/50">
+                            Show Older Messages
+                        </button>
+                    </div>
+                )}
+                {displayedMessages.map((msg, index) => (
                     <React.Fragment key={msg.id}>
-                        { (index === 0 || !isSameDay(session.messages[index - 1].timestamp, msg.timestamp)) && msg.timestamp && <DateSeparator timestamp={msg.timestamp} /> }
-                        <EditableGroupChatMessage message={msg} characterMap={characterMap} userPersona={userPersona} isLastMessage={index === session.messages.length - 1} isLoading={isLoading} onDelete={deleteGroupMessage} onRegenerate={regenerateGroupResponse} onFork={forkGroupChat} isEditing={msg.id === editingMessageId} editingText={editingText} onSetEditingText={setEditingText} onStartEdit={startEditing} onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onShowReasoning={setReasoningForModal} />
+                        { (index === 0 || !isSameDay(displayedMessages[index - 1].timestamp, msg.timestamp)) && msg.timestamp && <DateSeparator timestamp={msg.timestamp} /> }
+                        <EditableGroupChatMessage message={msg} characterMap={characterMap} userPersona={userPersona} isLastMessage={msg.id === lastMessage?.id} isLoading={isLoading} onDelete={store.deleteGroupMessage} onRegenerate={store.regenerateGroupResponse} onFork={store.forkGroupChat} isEditing={msg.id === editingMessageId} editingText={editingText} onSetEditingText={setEditingText} onStartEdit={startEditing} onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onShowThinking={setThinkingForModal} />
                     </React.Fragment>
                 ))}
                 {showTypingIndicator && <TypingIndicator />}
@@ -260,7 +280,7 @@ const GroupChatWindow: React.FC<GroupChatWindowProps> = () => {
                 <form onSubmit={handleFormSubmit} className="relative w-full">
                     <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Send a message to the group..." className="w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-4 pr-20 resize-none outline-none text-base text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all duration-200 custom-scrollbar min-h-[3.5rem]" rows={1} disabled={isLoading} />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        {isLoading ? ( <button type="button" onClick={stopGeneration} className="w-10 h-10 flex items-center justify-center rounded-md bg-fuchsia-600 text-white hover:bg-fuchsia-500 transition-colors shadow-lg" aria-label="Stop generation"><Icon name="stop" className="w-5 h-5" /></button> )
+                        {isLoading ? ( <button type="button" onClick={store.stopGeneration} className="w-10 h-10 flex items-center justify-center rounded-md bg-fuchsia-600 text-white hover:bg-fuchsia-500 transition-colors shadow-lg" aria-label="Stop generation"><Icon name="stop" className="w-5 h-5" /></button> )
                         : ( <button type="submit" disabled={!canSubmit && !canContinue} className="w-10 h-10 flex items-center justify-center rounded-md bg-sky-600 text-white disabled:bg-slate-700 disabled:cursor-not-allowed hover:bg-sky-500 transition-colors shadow-lg shadow-sky-900/50" aria-label={canContinue ? "Continue generation" : "Send message"}><Icon name={canContinue ? 'ellipsis-horizontal' : 'send'} className="w-5 h-5" /></button> )}
                     </div>
                 </form>

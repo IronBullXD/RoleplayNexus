@@ -41,7 +41,8 @@ export const useSessionLogic = ({
       messages: [], 
       worldId: settings.worldId,
       temperature: settings.temperature,
-      reasoningEnabled: settings.reasoningEnabled,
+      // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+      thinkingEnabled: settings.thinkingEnabled,
       contextSize: settings.contextSize,
       maxOutputTokens: settings.maxOutputTokens,
       memoryEnabled: false,
@@ -73,7 +74,8 @@ export const useSessionLogic = ({
         messages: [], 
         worldId: settings.worldId,
         temperature: settings.temperature,
-        reasoningEnabled: settings.reasoningEnabled,
+        // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+        thinkingEnabled: settings.thinkingEnabled,
         contextSize: settings.contextSize,
         maxOutputTokens: settings.maxOutputTokens,
         memoryEnabled: false,
@@ -143,7 +145,8 @@ export const useSessionLogic = ({
         messages: [], 
         worldId: settings.worldId,
         temperature: settings.temperature,
-        reasoningEnabled: settings.reasoningEnabled,
+        // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+        thinkingEnabled: settings.thinkingEnabled,
         contextSize: settings.contextSize,
         maxOutputTokens: settings.maxOutputTokens,
         memoryEnabled: false,
@@ -186,7 +189,8 @@ export const useSessionLogic = ({
 
   const setWorld = useCallback((worldId: string | null) => updateActiveSessionSettings({ worldId }), [updateActiveSessionSettings]);
   const setTemperature = useCallback((temperature: number) => updateActiveSessionSettings({ temperature }), [updateActiveSessionSettings]);
-  const setReasoningEnabled = useCallback((enabled: boolean) => updateActiveSessionSettings({ reasoningEnabled: enabled }), [updateActiveSessionSettings]);
+  // FIX: Replaced `reasoningEnabled` with `thinkingEnabled` to match type definitions.
+  const setThinkingEnabled = useCallback((enabled: boolean) => updateActiveSessionSettings({ thinkingEnabled: enabled }), [updateActiveSessionSettings]);
   const setContextSize = useCallback((contextSize: number) => updateActiveSessionSettings({ contextSize }), [updateActiveSessionSettings]);
   const setMaxOutputTokens = useCallback((maxOutputTokens: number) => updateActiveSessionSettings({ maxOutputTokens }), [updateActiveSessionSettings]);
   const setMemoryEnabled = useCallback((enabled: boolean) => updateActiveSessionSettings({ memoryEnabled: enabled }), [updateActiveSessionSettings]);
@@ -209,7 +213,8 @@ export const useSessionLogic = ({
     deleteGroupSession,
     setWorld,
     setTemperature,
-    setReasoningEnabled,
+    // FIX: Replaced `setReasoningEnabled` with `setThinkingEnabled` to match type definitions.
+    setThinkingEnabled,
     setContextSize,
     setMaxOutputTokens,
     setMemoryEnabled,

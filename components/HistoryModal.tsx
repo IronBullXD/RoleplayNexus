@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Character, ChatSession, GroupChatSession } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface HistoryModalProps {
   onClose: () => void;
@@ -27,7 +27,7 @@ const HistoryItem: React.FC<{ avatars: (string | undefined)[]; title: string; su
 );
 
 const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
-    const { characters, conversations, groupConversations, selectSession, selectGroupSession, deleteSession, deleteGroupSession } = useAppContext();
+    const { characters, conversations, groupConversations, selectSession, selectGroupSession, deleteSession, deleteGroupSession } = useAppStore();
     const [activeTab, setActiveTab] = useState<'single' | 'group'>('single');
 
     useEffect(() => {
@@ -36,16 +36,19 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
       return () => document.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    const charactersById = useMemo(() => new Map(characters.map(c => [c.id, c])), [characters]);
+    // FIX: Cast 'characters' to Character[] to fix 'map' does not exist on 'unknown' error.
+    const charactersById = useMemo(() => new Map((characters as Character[]).map(c => [c.id, c])), [characters]);
 
     const singleChatSessions = useMemo(() => (
-        (Object.entries(conversations) as [string, ChatSession[]][])
+        // FIX: Cast 'conversations' to its correct type to resolve errors with '.flatMap' and subsequent property access.
+        Object.entries(conversations as Record<string, ChatSession[]>)
             .flatMap(([charId, sessions]) => sessions.map(s => ({ charId, session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 })))
             .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
     ), [conversations]);
 
     const groupChatSessions = useMemo(() => (
-        (Object.values(groupConversations) as GroupChatSession[])
+        // FIX: Cast 'groupConversations' to its correct type to resolve errors with '.map' and subsequent property access.
+        Object.values(groupConversations as Record<string, GroupChatSession>)
             .map(s => ({ session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 }))
             .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
     ), [groupConversations]);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { World, WorldEntry, WorldEntryCategory } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
 
 interface WorldEditorPageProps {
@@ -261,7 +261,7 @@ const CategoryAccordion: React.FC<{
 
 
 const WorldEditorPage: React.FC<WorldEditorPageProps> = ({ world, onSave, onClose }) => {
-  const { requestConfirmation } = useAppContext();
+  const { requestConfirmation } = useAppStore();
   const [formData, setFormData] = useState<Partial<World>>({ name: '', avatar: '', description: '', entries: [], });
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [expandedEntryIds, setExpandedEntryIds] = useState<Set<string>>(new Set());

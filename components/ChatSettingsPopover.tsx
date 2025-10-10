@@ -1,20 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { World, Settings } from '../types';
+import { World, Settings, PromptAdherence } from '../types';
 import { Icon } from './Icon';
 import { Tooltip } from './Tooltip';
 
 interface ChatSettingsPopoverProps {
-    settings: Pick<Settings, 'worldId' | 'temperature' | 'reasoningEnabled' | 'contextSize' | 'maxOutputTokens'> & { memoryEnabled: boolean };
+    settings: Pick<Settings, 'worldId' | 'temperature' | 'thinkingEnabled' | 'contextSize' | 'maxOutputTokens' | 'promptAdherence'> & { memoryEnabled: boolean };
     worlds: World[];
     onSetWorld: (worldId: string | null) => void;
     onSetTemperature: (temperature: number) => void;
-    onSetReasoningEnabled: (enabled: boolean) => void;
+    onSetThinkingEnabled: (enabled: boolean) => void;
     onSetContextSize: (size: number) => void;
     onSetMaxOutputTokens: (tokens: number) => void;
     onSetMemoryEnabled: (enabled: boolean) => void;
+    onSetPromptAdherence: (adherence: PromptAdherence) => void;
 }
 
-const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, worlds, onSetWorld, onSetTemperature, onSetReasoningEnabled, onSetContextSize, onSetMaxOutputTokens, onSetMemoryEnabled }) => {
+const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, worlds, onSetWorld, onSetTemperature, onSetThinkingEnabled, onSetContextSize, onSetMaxOutputTokens, onSetMemoryEnabled, onSetPromptAdherence }) => {
     const [isOpen, setIsOpen] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -114,6 +115,20 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                         </div>
                     </div>
                     
+                    {/* Prompt Adherence */}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300">Prompt Adherence</label>
+                        <p className="text-xs text-slate-500 mb-2">"Strict" mode repeats key rules to improve AI focus.</p>
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-800 rounded-lg">
+                            <button type="button" onClick={() => onSetPromptAdherence('default')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.promptAdherence === 'default' ? 'bg-sky-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'}`}>
+                                Default
+                            </button>
+                            <button type="button" onClick={() => onSetPromptAdherence('strict')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.promptAdherence === 'strict' ? 'bg-sky-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'}`}>
+                                Strict
+                            </button>
+                        </div>
+                    </div>
+                    
                     <hr className="!my-4 border-slate-800" />
                     
                     {/* Feature Toggles */}
@@ -122,12 +137,12 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                             <div className="flex items-center gap-3">
                                 <Icon name="brain" className="w-6 h-6 text-slate-400 shrink-0" />
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300">Show AI Reasoning</label>
+                                    <label className="block text-sm font-medium text-slate-300">Enable AI Thinking</label>
                                     <p className="text-xs text-slate-500">Reveals the AI's thought process.</p>
                                 </div>
                             </div>
-                            <button type="button" role="switch" aria-checked={settings.reasoningEnabled} onClick={() => onSetReasoningEnabled(!settings.reasoningEnabled)} className={`relative inline-flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.reasoningEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
-                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out ${settings.reasoningEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                            <button type="button" role="switch" aria-checked={settings.thinkingEnabled} onClick={() => onSetThinkingEnabled(!settings.thinkingEnabled)} className={`relative inline-flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.thinkingEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
+                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out ${settings.thinkingEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                             </button>
                         </div>
                         <div className="flex justify-between items-center">

@@ -1,10 +1,10 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
-import { Character } from '../types';
+import { Character, ChatSession, GroupChatSession } from '../types';
 import { Icon, IconButton } from './Icon';
 import SimpleMarkdown from './SimpleMarkdown';
 import { GM_CHARACTER_ID } from '../constants';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface CharacterSelectionProps {
   onNewCharacter: () => void;
@@ -173,7 +173,7 @@ type SortOrder = 'last-played' | 'name-asc' | 'name-desc';
 const RECENT_CHAT_LIMIT = 5;
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({ onNewCharacter, onEditCharacter, onNavigateToSettings, onNavigateToHistory, onNavigateToGroupSetup, onNavigateToWorlds, onNavigateToPersona, onNavigateToDebug }) => {
-    const { characters, conversations, groupConversations, startChat, selectSession, selectGroupSession, deleteCharacter, importCharacters, duplicateCharacter } = useAppContext();
+    const { characters, conversations, groupConversations, startChat, selectSession, selectGroupSession, deleteCharacter, importCharacters, duplicateCharacter } = useAppStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortOrder, setSortOrder] = useState<SortOrder>('last-played');
@@ -208,11 +208,14 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({ onNewCharacter,
     };
 
     const { recentSessions, totalRecentCount } = useMemo(() => {
-        const singleSessions = Object.entries(conversations).flatMap(([charId, sessions]) => {
+        // FIX: Cast 'conversations' to its correct type to resolve errors with 'flatMap' and property access.
+        const singleSessions = Object.entries(conversations as Record<string, ChatSession[]>).flatMap(([charId, sessions]) => {
             const char = characters.find(c => c.id === charId);
             return char ? sessions.map(s => ({ type: 'single' as const, id: s.id, characterId: charId, title: char.name, avatars: [char.avatar], lastMessage: s.messages[s.messages.length - 1]?.content || 'Chat started.', timestamp: s.messages[s.messages.length - 1]?.timestamp || 0 })) : [];
         });
-        const groupSessions = Object.values(groupConversations).map(s => {
+
+        // FIX: Cast 'groupConversations' to its correct type to resolve errors with '.map' and property access.
+        const groupSessions = Object.values(groupConversations as Record<string, GroupChatSession>).map(s => {
             const sessionChars = s.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
             return { type: 'group' as const, id: s.id, title: s.title, avatars: sessionChars.map(c => c.avatar), lastMessage: s.messages[s.messages.length - 1]?.content || 'Group chat started.', timestamp: s.messages[s.messages.length - 1]?.timestamp || 0 };
         });
@@ -232,7 +235,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({ onNewCharacter,
 
     const lastPlayedTimestamps = useMemo(() => {
         const timestamps = new Map<string, number>();
-        Object.entries(conversations).forEach(([charId, sessions]) => {
+        // FIX: Cast 'conversations' to its correct type to resolve error with '.forEach'.
+        Object.entries(conversations as Record<string, ChatSession[]>).forEach(([charId, sessions]) => {
             let maxTimestamp = 0;
             sessions.forEach(session => {
                 if (session.messages.length > 0) {
@@ -313,7 +317,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({ onNewCharacter,
                         </div>
                         <select
                             className="bg-slate-900 border-2 border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition appearance-none"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
                             value={sortOrder}
                             onChange={(e) => setSortOrder(e.target.value as SortOrder)}
                             aria-label="Sort characters"

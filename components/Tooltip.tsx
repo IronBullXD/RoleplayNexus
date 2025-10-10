@@ -26,13 +26,13 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 
   if (!content) return children;
 
   return (
-    <div className="relative inline-flex group">
+    <div className="relative inline-flex group/tooltip">
       {children}
       <div
         role="tooltip"
         className={`absolute z-50 px-2.5 py-1.5 text-xs font-semibold text-slate-100 bg-slate-800 border border-slate-700/50 rounded-md shadow-lg whitespace-nowrap 
-                   opacity-0 group-hover:opacity-100 group-focus-within:opacity-100
-                   ${animationClasses[position]} group-hover:translate-y-0 group-focus-within:translate-y-0
+                   opacity-0 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100
+                   ${animationClasses[position]} group-hover/tooltip:translate-y-0 group-focus-within/tooltip:translate-y-0
                    transition-all duration-200 delay-300 pointer-events-none
                    ${positionClasses[position]} ${className}`}
       >

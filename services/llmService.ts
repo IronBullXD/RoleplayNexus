@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Message, LLMProvider, World, Persona, WorldEntry } from '../types';
-import { API_ENDPOINTS } from "../constants";
+import { Message, LLMProvider, World, Persona, WorldEntry, PromptAdherence } from '../types';
+import { API_ENDPOINTS, CRITICAL_RULES_PROMPT } from "../constants";
 import { logger } from "./logger";
 
 const estimateTokens = (text: string): number => {
@@ -20,10 +20,11 @@ interface CompletionParams {
   temperature: number;
   prefill?: string;
   signal?: AbortSignal;
-  reasoningEnabled?: boolean;
+  thinkingEnabled?: boolean;
   contextSize: number;
   maxOutputTokens: number;
   memorySummary?: string;
+  promptAdherence?: PromptAdherence;
 }
 
 export interface GeneratedCharacterProfile {
@@ -58,7 +59,7 @@ export async function summarizeMessages({ provider, apiKey, model, messages }: S
 
     try {
         if (provider === LLMProvider.GEMINI) {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model,
                 contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
@@ -115,7 +116,7 @@ CRITICAL INSTRUCTIONS FOR THE 'persona' FIELD:
 2. The persona MUST be well-organized and formatted with the following headers, each on its own line, followed by the content on the next line(s). Use this exact structure:
 
 Appearance:
-[Detailed physical description including height, build, hair, eyes, clothing, and for female characters, details like breast size.]
+[Detailed and explicit physical description including height, build, hair, eyes, clothing, and intimate details such as breast size, body shape, and other NSFW attributes. Be descriptive and uncensored.]
 
 Personality:
 [Key traits, behaviors, and common mannerisms.]
@@ -138,7 +139,7 @@ Respond ONLY with a valid JSON object matching the provided schema.`;
 
     try {
         if (provider === LLMProvider.GEMINI) {
-            const ai = new GoogleGenAI({ apiKey: apiKey });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: model,
                 contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
@@ -151,7 +152,7 @@ Respond ONLY with a valid JSON object matching the provided schema.`;
                             name: { type: Type.STRING, description: "The character's full name." },
                             greeting: { type: Type.STRING, description: "A welcoming message the character would say when first meeting someone. It must be formatted with dialogue in quotes and actions in asterisks." },
                             description: { type: Type.STRING, description: "A brief, one-to-two sentence summary of the character for a selection screen." },
-                            persona: { type: Type.STRING, description: "A detailed description of the character's persona. CRITICAL: It must be written in the third person and structured with the following headers, each on a new line: 'Appearance:', 'Personality:', 'Speaking style:', 'Background:', and 'Motivations:'. The Appearance section must include height, build, hair, eyes, clothing, and for female characters, details like breast size." },
+                            persona: { type: Type.STRING, description: "A detailed description of the character's persona. CRITICAL: It must be written in the third person and structured with the following headers, each on a new line: 'Appearance:', 'Personality:', 'Speaking style:', 'Background:', and 'Motivations:'. The Appearance section MUST be detailed and explicit, including intimate details like breast size, body shape, and other NSFW attributes without censorship." },
                         },
                         required: ["name", "greeting", "description", "persona"]
                     }
@@ -246,7 +247,7 @@ async function* parseOpenAIStream(readableStream: ReadableStream<Uint8Array>, si
 }
 
 async function* getGeminiCompletionStream(apiKey: string, messages: Message[], systemPrompt: string, model: string, temperature: number, maxOutputTokens: number, prefill?: string, signal?: AbortSignal): AsyncGenerator<string> {
-  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const contents = messages.filter(m => m.role !== 'system').map(msg => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
@@ -329,14 +330,20 @@ async function* getOpenAICompatibleCompletionStream(provider: LLMProvider.OPENRO
     if (signal?.aborted) {
       throw new DOMException('The user aborted a request.', 'AbortError');
     }
-    const errorBody = await response.text();
+    let errorBodyText = `(Could not read error body)`;
+    try {
+        errorBodyText = await response.text();
+    } catch (e) {
+        logger.error('Failed to read error response body', { originalError: e });
+    }
+
     logger.error(`OpenAI-compatible API request failed: ${response.status}`, { 
         provider,
         status: response.status, 
-        body: errorBody,
+        body: errorBodyText,
         requestBody: body
     });
-    throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+    throw new Error(`API request failed with status ${response.status}: ${errorBodyText}`);
   }
   
   if (!response.body) {
@@ -347,7 +354,7 @@ async function* getOpenAICompatibleCompletionStream(provider: LLMProvider.OPENRO
   yield* parseOpenAIStream(response.body, signal);
 }
 
-export async function* getChatCompletionStream({ provider, apiKey, model, messages, characterPersona, userPersona, globalSystemPrompt, world, temperature, prefill, signal, reasoningEnabled, contextSize, maxOutputTokens, memorySummary }: CompletionParams): AsyncGenerator<string> {
+export async function* getChatCompletionStream({ provider, apiKey, model, messages, characterPersona, userPersona, globalSystemPrompt, world, temperature, prefill, signal, thinkingEnabled, contextSize, maxOutputTokens, memorySummary, promptAdherence }: CompletionParams): AsyncGenerator<string> {
   if (!model?.trim()) {
     throw new Error(`Model name for ${provider} is not configured. Please set it in API Settings.`);
   }
@@ -452,74 +459,43 @@ export async function* getChatCompletionStream({ provider, apiKey, model, messag
       }
   }
 
-
   finalSystemPrompt += `\n\nYOUR ROLE IN THIS SCENE:\n${characterPersona}`;
 
-  if (reasoningEnabled) {
-    finalSystemPrompt += `\n\nREASONING INSTRUCTIONS:\nAfter your complete roleplay response, you MUST include the separator token \`<|REASONING|>\`. After this token, provide a brief, out-of-character explanation for your creative choices. This reasoning should analyze the user's prompt, your character's persona, and the narrative goals to justify the content, tone, and direction of your reply.`;
+  if (thinkingEnabled) {
+    finalSystemPrompt += `\n\nTHINKING INSTRUCTIONS:\nAfter your complete roleplay response, you MUST include the separator token \`<|THINKING|>\`. After this token, provide a brief, out-of-character explanation for your creative choices. This thinking process should analyze the user's prompt, your character's persona, and the narrative goals to justify the content, tone, and direction of your reply.`;
   }
   
-  let apiMessages: Message[];
-  const firstUserMessageIndex = messages.findIndex(m => m.role === 'user');
-
-  if (firstUserMessageIndex === -1) {
-    const assistantContent = messages.map(m => m.content).join('\n\n');
-    finalSystemPrompt += `\n\nThe conversation has just begun. Your opening message(s) were:\n"""\n${assistantContent}\n"""\nNow, please continue the conversation without repeating what you just said.`;
-    apiMessages = [{ id: 'synthetic-user-prompt', role: 'user', content: '(The user silently waits for you to continue.)' }];
-  } else {
-    apiMessages = messages.slice(firstUserMessageIndex);
+  if (promptAdherence === 'strict') {
+    finalSystemPrompt += `\n\n**CRITICAL REMINDER OF YOUR CORE DIRECTIVES:**\n${CRITICAL_RULES_PROMPT}`;
   }
 
-  const lastApiMessage = apiMessages[apiMessages.length - 1];
-  if (lastApiMessage && lastApiMessage.role === 'assistant') {
-      apiMessages.push({ id: 'synthetic-user-continue', role: 'user', content: '(Please continue.)' });
-  }
+  // Token Management - Truncate messages to fit context window
+  const availableTokensForHistory = contextSize;
   
-  if (apiMessages.length === 0 && !prefill) {
-    if (!messages.some(m => m.role === 'assistant')) { 
-      throw new Error("Cannot generate a response without user input or an initial message.");
-    }
-  }
+  const truncatedMessages: Message[] = [];
+  let usedTokens = 0;
 
-  let truncatedMessages = apiMessages;
-  if (contextSize > 0) {
-      let currentTokens = estimateTokens(finalSystemPrompt);
-      const messagesToKeep: Message[] = [];
-      
-      for (let i = apiMessages.length - 1; i >= 0; i--) {
-          const message = apiMessages[i];
-          const messageTokens = estimateTokens(message.content);
-          if (currentTokens + messageTokens <= contextSize) {
-              messagesToKeep.unshift(message);
-              currentTokens += messageTokens;
-          } else {
-              break;
-          }
+  // Iterate backwards through messages to keep the most recent ones
+  for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const messageTokens = estimateTokens(message.content);
+      if (usedTokens + messageTokens > availableTokensForHistory) {
+          logger.log(`Context limit reached. Truncating messages.`, { availableTokens: availableTokensForHistory, usedTokens, totalMessages: messages.length, messagesKept: truncatedMessages.length });
+          break;
       }
-      truncatedMessages = messagesToKeep;
+      truncatedMessages.unshift(message); // Add to the beginning of the array
+      usedTokens += messageTokens;
   }
 
-  logger.apiRequest('Sending chat completion stream request', {
-    provider,
-    model,
-    temperature,
-    contextSize,
-    maxOutputTokens,
-    reasoningEnabled,
-    // FIX: The variable 'systemPrompt' was not defined. It should be 'finalSystemPrompt'.
-    systemPrompt: finalSystemPrompt, // Log the final, constructed prompt
-    messages: truncatedMessages,
-  });
-
-  switch (provider) {
-    case LLMProvider.GEMINI:
-      yield* getGeminiCompletionStream(apiKey, truncatedMessages, finalSystemPrompt, model, temperature, maxOutputTokens, prefill, signal);
-      break;
-    case LLMProvider.OPENROUTER:
-    case LLMProvider.DEEPSEEK:
-      yield* getOpenAICompatibleCompletionStream(provider, apiKey, truncatedMessages, finalSystemPrompt, model, temperature, maxOutputTokens, prefill, signal);
-      break;
-    default:
-      throw new Error(`Unsupported LLM provider: ${provider}`);
+  const apiMessages = truncatedMessages.filter(m => m.role !== 'system');
+  
+  // Now call the appropriate stream generator based on provider.
+  if (provider === LLMProvider.GEMINI) {
+      yield* getGeminiCompletionStream(apiKey, apiMessages, finalSystemPrompt, model, temperature, maxOutputTokens, prefill, signal);
+  } else if (provider === LLMProvider.OPENROUTER || provider === LLMProvider.DEEPSEEK) {
+      yield* getOpenAICompatibleCompletionStream(provider, apiKey, apiMessages, finalSystemPrompt, model, temperature, maxOutputTokens, prefill, signal);
+  } else {
+      logger.error(`Unsupported provider in getChatCompletionStream: ${provider}`);
+      throw new Error(`Unsupported provider: ${provider}`);
   }
 }

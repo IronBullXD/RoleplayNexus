@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Persona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface PersonaEditorProps {
   persona: Persona;
@@ -10,7 +10,7 @@ interface PersonaEditorProps {
 }
 
 const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
-  const { savePersona } = useAppContext();
+  const { savePersona } = useAppStore();
   const [formData, setFormData] = useState<Persona>(persona);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

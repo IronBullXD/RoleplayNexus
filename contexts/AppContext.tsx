@@ -68,7 +68,8 @@ export interface AppContextType {
   // Session Settings Actions
   setWorld: (worldId: string | null) => void;
   setTemperature: (temperature: number) => void;
-  setReasoningEnabled: (enabled: boolean) => void;
+  // FIX: Renamed `setReasoningEnabled` to `setThinkingEnabled` to match the correct property name in the type definitions.
+  setThinkingEnabled: (enabled: boolean) => void;
   setContextSize: (contextSize: number) => void;
   setMaxOutputTokens: (maxOutputTokens: number) => void;
   setMemoryEnabled: (enabled: boolean) => void;

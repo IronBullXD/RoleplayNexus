@@ -1,5 +1,7 @@
 
 
+
+
 export enum LLMProvider {
   GEMINI = 'Gemini',
   OPENROUTER = 'OpenRouter',
@@ -37,7 +39,7 @@ export interface Message {
   content: string;
   timestamp?: number;
   characterId?: string; // For group chats
-  reasoning?: string;
+  thinking?: string;
 }
 
 export enum WorldEntryCategory {
@@ -68,6 +70,7 @@ export interface World {
   entries: WorldEntry[];
 }
 
+export type PromptAdherence = 'default' | 'strict';
 
 export interface ChatSession {
   id: string;
@@ -75,11 +78,12 @@ export interface ChatSession {
   messages: Message[];
   worldId?: string | null;
   temperature?: number;
-  reasoningEnabled?: boolean;
+  thinkingEnabled?: boolean;
   contextSize?: number;
   maxOutputTokens?: number;
   memorySummary?: string;
   memoryEnabled?: boolean;
+  promptAdherence?: PromptAdherence;
 }
 
 export interface GroupChatSession {
@@ -90,11 +94,12 @@ export interface GroupChatSession {
   messages: Message[];
   worldId?: string | null;
   temperature?: number;
-  reasoningEnabled?: boolean;
+  thinkingEnabled?: boolean;
   contextSize?: number;
   maxOutputTokens?: number;
   memorySummary?: string;
   memoryEnabled?: boolean;
+  promptAdherence?: PromptAdherence;
 }
 
 export interface Settings {
@@ -111,7 +116,8 @@ export interface Settings {
   maxOutputTokens: number;
   temperature: number;
   worldId: string | null;
-  reasoningEnabled: boolean;
+  thinkingEnabled: boolean;
+  promptAdherence: PromptAdherence;
 }
 
 export type View = 'CHARACTER_SELECTION' | 'CHAT' | 'GROUP_CHAT_SETUP' | 'GROUP_CHAT';

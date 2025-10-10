@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Character, StructuredPersona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface CharacterEditorProps {
   character: Character | null;
@@ -37,7 +37,7 @@ const serializePersona = (structured: StructuredPersona): string => (
 );
 
 const CharacterEditor: React.FC<CharacterEditorProps> = ({ character, onClose }) => {
-  const { saveCharacter, generateCharacterProfile } = useAppContext();
+  const { saveCharacter, generateCharacterProfile } = useAppStore();
   const [formData, setFormData] = useState<Partial<Character>>({ name: '', avatar: '', greeting: '', description: '', persona: '' });
   const [structuredPersona, setStructuredPersona] = useState<StructuredPersona>(initialStructuredPersona);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +113,7 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({ character, onClose })
                         <label htmlFor="ai-concept" className="block text-sm font-medium text-slate-200 font-display tracking-wider">CHARACTER CONCEPT</label>
                         <p className="text-xs text-slate-400">Describe your character idea, and the AI will generate a profile.</p>
                         <div className="flex items-center gap-2">
-                            <input type="text" id="ai-concept" value={aiConcept} onChange={(e) => setAiConcept(e.target.value)} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-2 placeholder:text-slate-600" placeholder="e.g., a grumpy dwarven blacksmith" disabled={isGenerating} />
+                            <input type="text" id="ai-concept" value={aiConcept} onChange={(e) => setAiConcept(e.target.value)} className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-2 placeholder:text-slate-600" disabled={isGenerating} />
                             <button type="button" onClick={handleGenerateClick} disabled={isGenerating || !aiConcept.trim()} className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-wait flex items-center gap-2 shrink-0 border border-sky-400/50 shadow-md shadow-sky-900/50"><Icon name={isGenerating ? 'redo' : 'sparkles'} className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />{isGenerating ? 'Generating...' : 'Generate'}</button>
                         </div>
                         {generationError && <p className="text-xs text-red-400 mt-2">{generationError}</p>}

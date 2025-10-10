@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AppProvider, useAppContext } from './contexts/AppContext';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAppStore } from './store/useAppStore';
 import { Character, Persona, World } from './types';
 import ChatWindow from './components/ChatWindow';
 import CharacterEditor from './components/CharacterEditor';
@@ -12,22 +12,42 @@ import WorldsPage from './components/WorldsPage';
 import ConfirmationModal from './components/ConfirmationModal';
 import PersonaEditor from './components/PersonaEditor';
 import DebugWindow from './components/DebugWindow';
+import { logger } from './services/logger';
 
-function AppContent() {
+function App() {
   const {
     currentView,
-    activeCharacter,
-    activeSession,
-    activeGroupSession,
-    characters,
-    userPersona,
-    worlds,
     isConfirmationModalOpen,
     handleCloseConfirmation,
     handleConfirm,
     confirmationAction,
     getAppState,
-  } = useAppContext();
+    userPersona,
+    worlds,
+    setCurrentView,
+    initStore,
+  } = useAppStore();
+
+  const activeCharacterId = useAppStore(state => state.activeCharacterId);
+  const activeSessionId = useAppStore(state => state.activeSessionId);
+  const activeGroupSessionId = useAppStore(state => state.activeGroupSessionId);
+  const characters = useAppStore(state => state.characters);
+
+  const activeCharacter = useMemo(() => characters.find(c => c.id === activeCharacterId), [characters, activeCharacterId]);
+  
+  useEffect(() => {
+    initStore(); // Ensures GM character is present on startup
+  }, [initStore]);
+
+  useEffect(() => {
+    if ((currentView === 'CHAT' && (!activeCharacter || !activeSessionId)) || (currentView === 'GROUP_CHAT' && !activeGroupSessionId)) {
+      logger.log('Invalid state for view, redirecting to CHARACTER_SELECTION', { 
+          currentView, activeCharacterId, activeSessionId, activeGroupSessionId 
+      });
+      useAppStore.getState().resetChatView();
+    }
+  }, [currentView, activeCharacter, activeSessionId, activeGroupSessionId, activeCharacterId]);
+
 
   // --- Modal State Management ---
   const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
@@ -51,12 +71,12 @@ function AppContent() {
   const renderView = () => {
     switch (currentView) {
       case 'CHAT':
-        if (!activeCharacter || !activeSession) return null;
+        if (!activeCharacterId || !activeSessionId) return null;
         return <ChatWindow />;
       case 'GROUP_CHAT_SETUP':
-        return <GroupChatSetup onBack={() => useAppContext().setCurrentView('CHARACTER_SELECTION')} />;
+        return <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />;
       case 'GROUP_CHAT':
-        if (!activeGroupSession) return null;
+        if (!activeGroupSessionId) return null;
         return <GroupChatWindow />;
       case 'CHARACTER_SELECTION':
       default:
@@ -66,7 +86,7 @@ function AppContent() {
             onEditCharacter={handleEditCharacter}
             onNavigateToSettings={() => setIsSettingsOpen(true)}
             onNavigateToHistory={() => setIsHistoryOpen(true)}
-            onNavigateToGroupSetup={() => useAppContext().setCurrentView('GROUP_CHAT_SETUP')}
+            onNavigateToGroupSetup={() => setCurrentView('GROUP_CHAT_SETUP')}
             onNavigateToWorlds={() => setIsWorldsModalOpen(true)}
             onNavigateToPersona={() => setIsPersonaEditorOpen(true)}
             onNavigateToDebug={() => setIsDebugWindowOpen(true)}
@@ -123,14 +143,6 @@ function AppContent() {
         appState={getAppState()}
       />
     </div>
-  );
-}
-
-function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
   );
 }
 

@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Character } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppContext } from '../contexts/AppContext';
+import { useAppStore } from '../store/useAppStore';
 
 interface GroupChatSetupProps {
     onBack: () => void;
 }
 
 const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
-    const { characters, createGroupChat } = useAppContext();
+    const { characters, createGroupChat } = useAppStore();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [scenario, setScenario] = useState('');
 
