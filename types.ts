@@ -1,7 +1,3 @@
-
-
-
-
 export enum LLMProvider {
   GEMINI = 'Gemini',
   OPENROUTER = 'OpenRouter',
@@ -63,14 +59,12 @@ export interface WorldEntry {
 }
 
 export interface World {
-  id:string;
+  id: string;
   name: string;
   avatar?: string;
   description: string;
   entries: WorldEntry[];
 }
-
-export type PromptAdherence = 'default' | 'strict';
 
 export interface ChatSession {
   id: string;
@@ -83,7 +77,6 @@ export interface ChatSession {
   maxOutputTokens?: number;
   memorySummary?: string;
   memoryEnabled?: boolean;
-  promptAdherence?: PromptAdherence;
 }
 
 export interface GroupChatSession {
@@ -99,7 +92,6 @@ export interface GroupChatSession {
   maxOutputTokens?: number;
   memorySummary?: string;
   memoryEnabled?: boolean;
-  promptAdherence?: PromptAdherence;
 }
 
 export interface Settings {
@@ -117,7 +109,10 @@ export interface Settings {
   temperature: number;
   worldId: string | null;
   thinkingEnabled: boolean;
-  promptAdherence: PromptAdherence;
 }
 
-export type View = 'CHARACTER_SELECTION' | 'CHAT' | 'GROUP_CHAT_SETUP' | 'GROUP_CHAT';
+export type View =
+  | 'CHARACTER_SELECTION'
+  | 'CHAT'
+  | 'GROUP_CHAT_SETUP'
+  | 'GROUP_CHAT';

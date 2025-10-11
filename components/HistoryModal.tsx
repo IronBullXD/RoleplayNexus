@@ -36,20 +36,17 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
       return () => document.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
 
-    // FIX: Cast 'characters' to Character[] to fix 'map' does not exist on 'unknown' error.
-    const charactersById = useMemo(() => new Map((characters as Character[]).map(c => [c.id, c])), [characters]);
-
     const singleChatSessions = useMemo(() => (
-        // FIX: Cast 'conversations' to its correct type to resolve errors with '.flatMap' and subsequent property access.
-        Object.entries(conversations as Record<string, ChatSession[]>)
-            .flatMap(([charId, sessions]) => sessions.map(s => ({ charId, session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 })))
+        // FIX: Added explicit type `[string, ChatSession[]]` to destructuring assignment to correctly type `sessions`.
+        Object.entries(conversations)
+            .flatMap(([charId, sessions]: [string, ChatSession[]]) => sessions.map(s => ({ charId, session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 })))
             .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
     ), [conversations]);
 
     const groupChatSessions = useMemo(() => (
-        // FIX: Cast 'groupConversations' to its correct type to resolve errors with '.map' and subsequent property access.
-        Object.values(groupConversations as Record<string, GroupChatSession>)
-            .map(s => ({ session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 }))
+        // FIX: Added explicit type `GroupChatSession` to `s` to correctly type the iterated object.
+        Object.values(groupConversations)
+            .map((s: GroupChatSession) => ({ session: s, lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0 }))
             .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
     ), [groupConversations]);
     
@@ -72,7 +69,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
                     {activeTab === 'single' ? (
                         <div className="space-y-3">
                             {singleChatSessions.length > 0 ? singleChatSessions.map(({ session, charId }) => {
-                                const character = charactersById.get(charId);
+                                const character = characters.find(c => c.id === charId);
                                 if (!character) return null;
                                 const lastMessage = session.messages[session.messages.length - 1];
                                 return ( <HistoryItem key={session.id} avatars={[character.avatar]} title={character.name} subtitle={session.title} lastMessage={lastMessage?.content} lastMessageTimestamp={lastMessage?.timestamp} onSelect={() => { selectSession(charId, session.id); onClose(); }} onDelete={() => deleteSession(charId, session.id)} /> );
@@ -81,7 +78,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
                     ) : (
                         <div className="space-y-3">
                             {groupChatSessions.length > 0 ? groupChatSessions.map(({ session }) => {
-                                const sessionCharacters = session.characterIds.map(id => charactersById.get(id)).filter((c): c is Character => !!c);
+                                const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter((c): c is Character => !!c);
                                 const lastMessage = session.messages[session.messages.length - 1];
                                 return ( <HistoryItem key={session.id} avatars={sessionCharacters.map(c => c.avatar)} title={session.title} subtitle="Group Chat" lastMessage={lastMessage?.content} lastMessageTimestamp={lastMessage?.timestamp} onSelect={() => { selectGroupSession(session.id); onClose(); }} onDelete={() => deleteGroupSession(session.id)} /> );
                             }) : <p className="text-center text-slate-500 pt-8">No group chat history found.</p>}

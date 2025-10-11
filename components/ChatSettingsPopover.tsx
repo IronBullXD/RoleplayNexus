@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { World, Settings, PromptAdherence } from '../types';
+import { World, Settings } from '../types';
 import { Icon } from './Icon';
 import { Tooltip } from './Tooltip';
 
 interface ChatSettingsPopoverProps {
-    settings: Pick<Settings, 'worldId' | 'temperature' | 'thinkingEnabled' | 'contextSize' | 'maxOutputTokens' | 'promptAdherence'> & { memoryEnabled: boolean };
+    settings: Pick<Settings, 'worldId' | 'temperature' | 'thinkingEnabled' | 'contextSize' | 'maxOutputTokens'> & { memoryEnabled: boolean };
     worlds: World[];
     onSetWorld: (worldId: string | null) => void;
     onSetTemperature: (temperature: number) => void;
@@ -12,7 +12,7 @@ interface ChatSettingsPopoverProps {
     onSetContextSize: (size: number) => void;
     onSetMaxOutputTokens: (tokens: number) => void;
     onSetMemoryEnabled: (enabled: boolean) => void;
-    onSetPromptAdherence: (adherence: PromptAdherence) => void;
+    onSetPromptAdherence: (adherence: 'default' | 'strict') => void;
 }
 
 const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, worlds, onSetWorld, onSetTemperature, onSetThinkingEnabled, onSetContextSize, onSetMaxOutputTokens, onSetMemoryEnabled, onSetPromptAdherence }) => {
@@ -112,20 +112,6 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                                 className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-2 text-sm"
                                 min="0" step="256"
                             />
-                        </div>
-                    </div>
-                    
-                    {/* Prompt Adherence */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300">Prompt Adherence</label>
-                        <p className="text-xs text-slate-500 mb-2">"Strict" mode repeats key rules to improve AI focus.</p>
-                        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-800 rounded-lg">
-                            <button type="button" onClick={() => onSetPromptAdherence('default')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.promptAdherence === 'default' ? 'bg-sky-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'}`}>
-                                Default
-                            </button>
-                            <button type="button" onClick={() => onSetPromptAdherence('strict')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.promptAdherence === 'strict' ? 'bg-sky-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'}`}>
-                                Strict
-                            </button>
                         </div>
                     </div>
                     

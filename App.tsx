@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from './store/useAppStore';
-import { Character, Persona, World } from './types';
+import { Character } from './types';
 import ChatWindow from './components/ChatWindow';
 import CharacterEditor from './components/CharacterEditor';
 import CharacterSelection from './components/CharacterSelection';
@@ -28,26 +28,36 @@ function App() {
     initStore,
   } = useAppStore();
 
-  const activeCharacterId = useAppStore(state => state.activeCharacterId);
-  const activeSessionId = useAppStore(state => state.activeSessionId);
-  const activeGroupSessionId = useAppStore(state => state.activeGroupSessionId);
-  const characters = useAppStore(state => state.characters);
+  const activeCharacterId = useAppStore((state) => state.activeCharacterId);
+  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const activeGroupSessionId = useAppStore(
+    (state) => state.activeGroupSessionId,
+  );
+  const characters = useAppStore((state) => state.characters);
 
-  const activeCharacter = useMemo(() => characters.find(c => c.id === activeCharacterId), [characters, activeCharacterId]);
-  
+  const activeCharacter = useMemo(
+    () => characters.find((c) => c.id === activeCharacterId),
+    [characters, activeCharacterId],
+  );
+
   useEffect(() => {
     initStore(); // Ensures GM character is present on startup
   }, [initStore]);
 
   useEffect(() => {
-    if ((currentView === 'CHAT' && (!activeCharacter || !activeSessionId)) || (currentView === 'GROUP_CHAT' && !activeGroupSessionId)) {
-      logger.log('Invalid state for view, redirecting to CHARACTER_SELECTION', { 
-          currentView, activeCharacterId, activeSessionId, activeGroupSessionId 
+    if (
+      (currentView === 'CHAT' && (!activeCharacter || !activeSessionId)) ||
+      (currentView === 'GROUP_CHAT' && !activeGroupSessionId)
+    ) {
+      logger.log('Invalid state for view, redirecting to CHARACTER_SELECTION', {
+        currentView,
+        activeCharacterId,
+        activeSessionId,
+        activeGroupSessionId,
       });
       useAppStore.getState().resetChatView();
     }
-  }, [currentView, activeCharacter, activeSessionId, activeGroupSessionId, activeCharacterId]);
-
+  }, [currentView, activeCharacter, activeSessionId, activeGroupSessionId]);
 
   // --- Modal State Management ---
   const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
@@ -56,8 +66,10 @@ function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWorldsModalOpen, setIsWorldsModalOpen] = useState(false);
   const [isDebugWindowOpen, setIsDebugWindowOpen] = useState(false);
-  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
-  
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(
+    null,
+  );
+
   const handleNewCharacter = () => {
     setEditingCharacter(null);
     setIsCharacterEditorOpen(true);
@@ -72,12 +84,16 @@ function App() {
     switch (currentView) {
       case 'CHAT':
         if (!activeCharacterId || !activeSessionId) return null;
-        return <ChatWindow />;
+        return <ChatWindow onNavigateToHistory={() => setIsHistoryOpen(true)} />;
       case 'GROUP_CHAT_SETUP':
-        return <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />;
+        return (
+          <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />
+        );
       case 'GROUP_CHAT':
         if (!activeGroupSessionId) return null;
-        return <GroupChatWindow />;
+        return (
+          <GroupChatWindow onNavigateToHistory={() => setIsHistoryOpen(true)} />
+        );
       case 'CHARACTER_SELECTION':
       default:
         return (
@@ -112,23 +128,12 @@ function App() {
           onClose={() => setIsPersonaEditorOpen(false)}
         />
       )}
-      {isSettingsOpen && (
-        <SettingsModal 
-            onClose={() => setIsSettingsOpen(false)}
-        />
+      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
+      {isHistoryOpen && <HistoryModal onClose={() => setIsHistoryOpen(false)} />}
+      {isWorldsModalOpen && (
+        <WorldsPage worlds={worlds} onClose={() => setIsWorldsModalOpen(false)} />
       )}
-      {isHistoryOpen && (
-        <HistoryModal
-          onClose={() => setIsHistoryOpen(false)}
-        />
-      )}
-       {isWorldsModalOpen && (
-        <WorldsPage
-            worlds={worlds}
-            onClose={() => setIsWorldsModalOpen(false)}
-        />
-       )}
-       <ConfirmationModal 
+      <ConfirmationModal
         isOpen={isConfirmationModalOpen}
         onClose={handleCloseConfirmation}
         onConfirm={handleConfirm}
@@ -137,7 +142,7 @@ function App() {
         confirmButtonText={confirmationAction?.confirmText}
         confirmButtonVariant={confirmationAction?.confirmVariant}
       />
-      <DebugWindow 
+      <DebugWindow
         isOpen={isDebugWindowOpen}
         onClose={() => setIsDebugWindowOpen(false)}
         appState={getAppState()}

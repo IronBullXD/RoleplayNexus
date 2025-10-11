@@ -29,6 +29,7 @@ const icons: { [key: string]: React.ReactNode } = {
   fork: <path strokeLinecap="round" strokeLinejoin="round" d="M6 3v4c0 1.1.9 2 2 2h4m0-6v4c0 1.1.9 2 2 2h2m-6 4v4c0 1.1.9 2 2 2h4" />,
   bug: <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 17.655l-1.5-1.5a2.25 2.25 0 00-3.182 0l-1.5 1.5a2.25 2.25 0 103.182 3.182l1.5-1.5a2.25 2.25 0 000-3.182zM12.75 9.655l1.5 1.5a2.25 2.25 0 003.182 0l1.5-1.5a2.25 2.25 0 10-3.182-3.182l-1.5 1.5a2.25 2.25 0 000 3.182zM4.145 13.855l1.5 1.5a2.25 2.25 0 010 3.182l-1.5 1.5a2.25 2.25 0 01-3.182-3.182l1.5-1.5a2.25 2.25 0 013.182 0zM19.855 4.145l-1.5-1.5a2.25 2.25 0 00-3.182 0l-1.5 1.5a2.25 2.25 0 103.182 3.182l1.5-1.5a2.25 2.25 0 000-3.182z" />,
   'chevron-down': <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />,
+  'chevron-up': <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />,
   'new-chat': <path strokeLinecap="round" strokeLinejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />,
   sliders: <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />,
   terminal: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />,
@@ -43,7 +44,11 @@ const icons: { [key: string]: React.ReactNode } = {
   globe: <><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75a9 9 0 0016.5 0" /></>,
 };
 
-export const Icon: React.FC<IconProps> = ({ name, className = "h-5 w-5", ...props }) => {
+export const Icon: React.FC<IconProps> = ({
+  name,
+  className = 'h-5 w-5',
+  ...props
+}) => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -68,26 +73,36 @@ export const IconButton: React.FC<{
   disabled?: boolean;
   className?: string;
   type?: 'button' | 'submit';
-}> = ({ onClick, icon, label, primary = false, danger = false, disabled = false, className = '', type = 'button' }) => {
-    const baseClasses = 'p-2 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900';
-    const variantClasses = primary
-        ? 'bg-sky-600 text-white hover:bg-sky-500 border border-sky-400/50 shadow-md shadow-sky-900/50'
-        : danger
-            ? 'bg-fuchsia-600/20 text-fuchsia-400 hover:bg-fuchsia-600/40 hover:text-fuchsia-300'
-            : 'text-slate-300 bg-slate-800/50 hover:bg-slate-700/50';
-    const disabledClasses = 'disabled:opacity-50 disabled:cursor-not-allowed';
+}> = ({
+  onClick,
+  icon,
+  label,
+  primary = false,
+  danger = false,
+  disabled = false,
+  className = '',
+  type = 'button',
+}) => {
+  const baseClasses =
+    'p-2 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900';
+  const variantClasses = primary
+    ? 'bg-sky-600 text-white hover:bg-sky-500 border border-sky-400/50 shadow-md shadow-sky-900/50'
+    : danger
+      ? 'bg-fuchsia-600/20 text-fuchsia-400 hover:bg-fuchsia-600/40 hover:text-fuchsia-300'
+      : 'text-slate-300 bg-slate-800/50 hover:bg-slate-700/50';
+  const disabledClasses = 'disabled:opacity-50 disabled:cursor-not-allowed';
 
-    return (
-        <Tooltip content={label} position="bottom">
-            <button
-                type={type}
-                onClick={onClick}
-                disabled={disabled}
-                className={`${baseClasses} ${variantClasses} ${disabledClasses} ${className}`}
-                aria-label={label}
-            >
-                <Icon name={icon} className="w-5 h-5" />
-            </button>
-        </Tooltip>
-    );
+  return (
+    <Tooltip content={label} position="bottom">
+      <button
+        type={type}
+        onClick={onClick}
+        disabled={disabled}
+        className={`${baseClasses} ${variantClasses} ${disabledClasses} ${className}`}
+        aria-label={label}
+      >
+        <Icon name={icon} className="w-5 h-5" />
+      </button>
+    </Tooltip>
+  );
 };

@@ -23,19 +23,20 @@ function formatRelativeTime(timestamp: number): string {
   const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
   const diffDays = Math.floor(diffSeconds / 86400);
 
-  if (diffSeconds < 60) return "Just now";
+  if (diffSeconds < 60) return 'Just now';
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
 
   const isSameYear = now.getFullYear() === date.getFullYear();
 
   if (diffDays === 1) return `Yesterday`;
-  if (diffDays < 7) return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+  if (diffDays < 7)
+    return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
 
-  return new Intl.DateTimeFormat(undefined, { 
-    month: 'short', 
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
     day: 'numeric',
-    year: isSameYear ? undefined : 'numeric' 
+    year: isSameYear ? undefined : 'numeric',
   }).format(date);
 }
 
@@ -48,307 +49,523 @@ type RecentSession = {
   lastMessage: string;
   lastMessageDate: string;
   timestamp: number;
-}
+};
 
-const RecentChatCard: React.FC<{ session: RecentSession, onClick: () => void }> = ({ session, onClick }) => (
-    <button onClick={onClick} className="w-full bg-slate-900 border border-slate-800 rounded-lg hover:border-sky-500/80 transition-all duration-300 group text-left p-3 flex items-center gap-3">
-        <div className="flex -space-x-3 shrink-0">
-            {session.avatars.slice(0, 3).map((avatar, index) => 
-                <Avatar key={index} src={avatar} alt="" shape="circle" className="w-10 h-10 border-2 border-slate-900" />
-            )}
+const RecentChatCard: React.FC<{
+  session: RecentSession;
+  onClick: () => void;
+}> = ({ session, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full bg-slate-900 border border-slate-800 rounded-lg hover:border-sky-500/80 transition-all duration-300 group text-left p-3 flex items-center gap-3"
+  >
+    <div className="flex -space-x-3 shrink-0">
+      {session.avatars.slice(0, 3).map((avatar, index) => (
+        <Avatar
+          key={index}
+          src={avatar}
+          alt=""
+          shape="circle"
+          className="w-10 h-10 border-2 border-slate-900"
+        />
+      ))}
+    </div>
+    <div className="flex-1 min-w-0">
+      <div className="flex justify-between items-baseline gap-2">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h3 className="font-bold text-sm text-slate-100 group-hover:text-sky-300 transition-colors truncate">
+            {session.title}
+          </h3>
+          {session.type === 'group' && (
+            <span className="text-xs font-semibold text-indigo-300 bg-indigo-900/50 px-2 py-0.5 rounded-full shrink-0">
+              GROUP
+            </span>
+          )}
         </div>
-        <div className="flex-1 min-w-0">
-             <div className="flex justify-between items-baseline gap-2">
-                <div className="flex items-baseline gap-2 min-w-0">
-                    <h3 className="font-bold text-sm text-slate-100 group-hover:text-sky-300 transition-colors truncate">{session.title}</h3>
-                    {session.type === 'group' && (
-                        <span className="text-xs font-semibold text-indigo-300 bg-indigo-900/50 px-2 py-0.5 rounded-full shrink-0">
-                            GROUP
-                        </span>
-                    )}
-                </div>
-                <p className="text-xs text-slate-500 font-medium shrink-0">{session.lastMessageDate}</p>
-            </div>
-            <p className="text-sm text-slate-400 line-clamp-1 mt-1">
-                <SimpleMarkdown text={session.lastMessage} />
-            </p>
-        </div>
-    </button>
+        <p className="text-xs text-slate-500 font-medium shrink-0">
+          {session.lastMessageDate}
+        </p>
+      </div>
+      <p className="text-sm text-slate-400 line-clamp-1 mt-1">
+        <SimpleMarkdown text={session.lastMessage} />
+      </p>
+    </div>
+  </button>
 );
-
 
 const ViewAllHistoryCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-    <button onClick={onClick} className="w-full h-full bg-slate-900/50 border border-dashed border-slate-700 rounded-lg hover:border-sky-700 hover:bg-sky-900/20 transition-all duration-300 group flex items-center justify-center text-slate-500 hover:text-sky-400">
-        <div className="flex items-center gap-3">
-            <Icon name="history" className="w-6 h-6 text-slate-600 group-hover:text-sky-400" />
-            <span className="font-semibold text-sm group-hover:text-sky-300">View All History</span>
-        </div>
-    </button>
+  <button
+    onClick={onClick}
+    className="w-full h-full bg-slate-900/50 border border-dashed border-slate-700 rounded-lg hover:border-sky-700 hover:bg-sky-900/20 transition-all duration-300 group flex items-center justify-center text-slate-500 hover:text-sky-400"
+  >
+    <div className="flex items-center gap-3">
+      <Icon name="history" className="w-6 h-6 text-slate-600 group-hover:text-sky-400" />
+      <span className="font-semibold text-sm group-hover:text-sky-300">
+        View All History
+      </span>
+    </div>
+  </button>
 );
 
-
 const CharacterCard: React.FC<{
-    character: Character;
-    onChat: () => void;
-    onEdit: () => void;
-    onDelete: () => void;
-    onExport: () => void;
-    onDuplicate: () => void;
+  character: Character;
+  onChat: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onExport: () => void;
+  onDuplicate: () => void;
 }> = ({ character, onChat, onEdit, onDelete, onExport, onDuplicate }) => {
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-    const cardRef = useRef<HTMLDivElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (cardRef.current) {
-                const rect = cardRef.current.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                cardRef.current.style.setProperty('--x', `${x}px`);
-                cardRef.current.style.setProperty('--y', `${y}px`);
-            }
-        };
-        cardRef.current?.addEventListener('mousemove', handleMouseMove);
-        const currentCardRef = cardRef.current;
-        return () => currentCardRef?.removeEventListener('mousemove', handleMouseMove);
-    }, []);
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        cardRef.current.style.setProperty('--x', `${x}px`);
+        cardRef.current.style.setProperty('--y', `${y}px`);
+      }
+    };
+    cardRef.current?.addEventListener('mousemove', handleMouseMove);
+    const currentCardRef = cardRef.current;
+    return () => currentCardRef?.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsMenuOpen(false);
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node))
+        setIsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    const handleMenuAction = (action: () => void) => { action(); setIsMenuOpen(false); }
-    
-    return (
-        <div ref={cardRef} className="card-glow bg-slate-900 rounded-lg flex flex-col group relative overflow-hidden aspect-[4/5] transition-all duration-300 hover:-translate-y-1">
-            {character.avatar ? (
-                <img src={character.avatar} alt={character.name} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105" />
-            ) : (
-                <div className="w-full h-full absolute inset-0 bg-slate-800 flex items-center justify-center">
-                    <Icon name="character" className="w-1/2 h-1/2 text-slate-600" />
-                </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
-            
-            <div className="relative mt-auto p-4 text-white z-10">
-                <h3 className="font-bold text-lg">{character.name}</h3>
-                <p className="text-sm text-slate-300 line-clamp-2 mt-1">{character.description}</p>
-            </div>
-            
-            <button onClick={onChat} className="absolute inset-0 z-20" aria-label={`Chat with ${character.name}`} />
+  const handleMenuAction = (action: () => void) => {
+    action();
+    setIsMenuOpen(false);
+  };
 
-            {!character.isImmutable && (
-              <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity" ref={menuRef}>
-                  <button onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }} className="p-2 rounded-md bg-black/50 hover:bg-black/80 backdrop-blur-sm" aria-label="Character actions">
-                      <Icon name="ellipsis-vertical" className="w-5 h-5 text-white" />
-                  </button>
-                  {isMenuOpen && (
-                      <div className="absolute right-0 mt-2 w-40 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-md shadow-xl z-30 py-1 animate-fade-in">
-                          <button onClick={() => handleMenuAction(onEdit)} className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"><Icon name="edit" className="w-4 h-4" /> Edit</button>
-                          <button onClick={() => handleMenuAction(onDuplicate)} className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"><Icon name="duplicate" className="w-4 h-4" /> Duplicate</button>
-                          <button onClick={() => handleMenuAction(onExport)} className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"><Icon name="export" className="w-4 h-4" /> Export</button>
-                          <button onClick={() => handleMenuAction(onDelete)} className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-fuchsia-500 hover:bg-slate-700/50 transition-colors"><Icon name="delete" className="w-4 h-4" /> Delete</button>
-                      </div>
-                  )}
-              </div>
-            )}
+  return (
+    <div
+      ref={cardRef}
+      className="card-glow bg-slate-900 rounded-lg flex flex-col group relative overflow-hidden aspect-[4/5] transition-all duration-300 hover:-translate-y-1"
+    >
+      {character.avatar ? (
+        <img
+          src={character.avatar}
+          alt={character.name}
+          className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="w-full h-full absolute inset-0 bg-slate-800 flex items-center justify-center">
+          <Icon name="character" className="w-1/2 h-1/2 text-slate-600" />
         </div>
-    );
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
+
+      <div className="relative mt-auto p-4 text-white z-10">
+        <h3 className="font-bold text-lg">{character.name}</h3>
+        <p className="text-sm text-slate-300 line-clamp-2 mt-1">
+          {character.description}
+        </p>
+      </div>
+
+      <button
+        onClick={onChat}
+        className="absolute inset-0 z-20"
+        aria-label={`Chat with ${character.name}`}
+      />
+
+      {!character.isImmutable && (
+        <div
+          className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity"
+          ref={menuRef}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMenuOpen((prev) => !prev);
+            }}
+            className="p-2 rounded-md bg-black/50 hover:bg-black/80 backdrop-blur-sm"
+            aria-label="Character actions"
+          >
+            <Icon name="ellipsis-vertical" className="w-5 h-5 text-white" />
+          </button>
+          {isMenuOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-md shadow-xl z-30 py-1 animate-fade-in">
+              <button
+                onClick={() => handleMenuAction(onEdit)}
+                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+              >
+                <Icon name="edit" className="w-4 h-4" /> Edit
+              </button>
+              <button
+                onClick={() => handleMenuAction(onDuplicate)}
+                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+              >
+                <Icon name="duplicate" className="w-4 h-4" /> Duplicate
+              </button>
+              <button
+                onClick={() => handleMenuAction(onExport)}
+                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+              >
+                <Icon name="export" className="w-4 h-4" /> Export
+              </button>
+              <button
+                onClick={() => handleMenuAction(onDelete)}
+                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-fuchsia-500 hover:bg-slate-700/50 transition-colors"
+              >
+                <Icon name="delete" className="w-4 h-4" /> Delete
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const NewCharacterCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-    <button onClick={onClick} className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-sky-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-sky-600/10 hover:-translate-y-1 animate-pulse-glow">
-        <Icon name="add" className="w-10 h-10 text-slate-600 group-hover:text-sky-500 transition-colors" />
-        <p className="mt-2 font-semibold text-slate-500 group-hover:text-sky-400">Create Character</p>
-    </button>
+  <button
+    onClick={onClick}
+    className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-sky-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-sky-600/10 hover:-translate-y-1 animate-pulse-glow"
+  >
+    <Icon name="add" className="w-10 h-10 text-slate-600 group-hover:text-sky-500 transition-colors" />
+    <p className="mt-2 font-semibold text-slate-500 group-hover:text-sky-400">
+      Create Character
+    </p>
+  </button>
 );
 
 type SortOrder = 'last-played' | 'name-asc' | 'name-desc';
 
 const RECENT_CHAT_LIMIT = 5;
 
-const CharacterSelection: React.FC<CharacterSelectionProps> = ({ onNewCharacter, onEditCharacter, onNavigateToSettings, onNavigateToHistory, onNavigateToGroupSetup, onNavigateToWorlds, onNavigateToPersona, onNavigateToDebug }) => {
-    const { characters, conversations, groupConversations, startChat, selectSession, selectGroupSession, deleteCharacter, importCharacters, duplicateCharacter } = useAppStore();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [sortOrder, setSortOrder] = useState<SortOrder>('last-played');
+const CharacterSelection: React.FC<CharacterSelectionProps> = ({
+  onNewCharacter,
+  onEditCharacter,
+  onNavigateToSettings,
+  onNavigateToHistory,
+  onNavigateToGroupSetup,
+  onNavigateToWorlds,
+  onNavigateToPersona,
+  onNavigateToDebug,
+}) => {
+  const {
+    characters,
+    conversations,
+    groupConversations,
+    startChat,
+    selectSession,
+    selectGroupSession,
+    deleteCharacter,
+    importCharacters,
+    duplicateCharacter,
+  } = useAppStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('last-played');
 
-    const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const imported = JSON.parse(e.target?.result as string);
-                    if (Array.isArray(imported) && imported.every(item => 'id' in item && 'name' in item)) {
-                        importCharacters(imported);
-                    } else { alert('Invalid character file format.'); }
-                } catch (error) { alert('Failed to parse character file.'); }
-            };
-            reader.readAsText(file);
-            if(event.target) event.target.value = '';
-        }
-    };
-    
-    const handleExportCharacter = (character: Character) => {
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
         try {
-            const filename = `${character.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_character.json`;
-            const blob = new Blob([JSON.stringify([character], null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (err) { alert(`Error exporting character: ${err instanceof Error ? err.message : "Unknown error"}`); }
-    };
+          const imported = JSON.parse(e.target?.result as string);
+          if (
+            Array.isArray(imported) &&
+            imported.every((item) => 'id' in item && 'name' in item)
+          ) {
+            importCharacters(imported);
+          } else {
+            alert('Invalid character file format.');
+          }
+        } catch (error) {
+          alert('Failed to parse character file.');
+        }
+      };
+      reader.readAsText(file);
+      if (event.target) event.target.value = '';
+    }
+  };
 
-    const { recentSessions, totalRecentCount } = useMemo(() => {
-        // FIX: Cast 'conversations' to its correct type to resolve errors with 'flatMap' and property access.
-        const singleSessions = Object.entries(conversations as Record<string, ChatSession[]>).flatMap(([charId, sessions]) => {
-            const char = characters.find(c => c.id === charId);
-            return char ? sessions.map(s => ({ type: 'single' as const, id: s.id, characterId: charId, title: char.name, avatars: [char.avatar], lastMessage: s.messages[s.messages.length - 1]?.content || 'Chat started.', timestamp: s.messages[s.messages.length - 1]?.timestamp || 0 })) : [];
-        });
+  const handleExportCharacter = (character: Character) => {
+    try {
+      const filename = `${character.name
+        .replace(/[^a-z0-9]/gi, '_')
+        .toLowerCase()}_character.json`;
+      const blob = new Blob([JSON.stringify([character], null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(
+        `Error exporting character: ${
+          err instanceof Error ? err.message : 'Unknown error'
+        }`,
+      );
+    }
+  };
 
-        // FIX: Cast 'groupConversations' to its correct type to resolve errors with '.map' and property access.
-        const groupSessions = Object.values(groupConversations as Record<string, GroupChatSession>).map(s => {
-            const sessionChars = s.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
-            return { type: 'group' as const, id: s.id, title: s.title, avatars: sessionChars.map(c => c.avatar), lastMessage: s.messages[s.messages.length - 1]?.content || 'Group chat started.', timestamp: s.messages[s.messages.length - 1]?.timestamp || 0 };
-        });
-        
-        const allSessions = [...singleSessions, ...groupSessions]
-            .filter(s => s.timestamp > 0)
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .map(s => ({ ...s, lastMessageDate: formatRelativeTime(s.timestamp) }));
-
-        return {
-            recentSessions: allSessions.slice(0, RECENT_CHAT_LIMIT),
-            totalRecentCount: allSessions.length,
-        };
-    }, [characters, conversations, groupConversations]);
-
-    const userCharacters = useMemo(() => characters.filter(c => !c.isImmutable), [characters]);
-
-    const lastPlayedTimestamps = useMemo(() => {
-        const timestamps = new Map<string, number>();
-        // FIX: Cast 'conversations' to its correct type to resolve error with '.forEach'.
-        Object.entries(conversations as Record<string, ChatSession[]>).forEach(([charId, sessions]) => {
-            let maxTimestamp = 0;
-            sessions.forEach(session => {
-                if (session.messages.length > 0) {
-                    const lastMessageTs = session.messages[session.messages.length - 1]?.timestamp;
-                    if (lastMessageTs && lastMessageTs > maxTimestamp) {
-                        maxTimestamp = lastMessageTs;
-                    }
-                }
-            });
-            if (maxTimestamp > 0) {
-                timestamps.set(charId, maxTimestamp);
-            }
-        });
-        return timestamps;
-    }, [conversations]);
-
-    const sortedAndFilteredCharacters = useMemo(() => {
-        return userCharacters
-            .filter(char => char.name.toLowerCase().includes(searchQuery.toLowerCase()))
-            .sort((a, b) => {
-                switch (sortOrder) {
-                    case 'name-asc': return a.name.localeCompare(b.name);
-                    case 'name-desc': return b.name.localeCompare(a.name);
-                    case 'last-played':
-                    default:
-                        const tsA = lastPlayedTimestamps.get(a.id) || 0;
-                        const tsB = lastPlayedTimestamps.get(b.id) || 0;
-                        return tsB - tsA;
-                }
-            });
-    }, [userCharacters, searchQuery, sortOrder, lastPlayedTimestamps]);
-
-    return (
-        <div className="w-full h-screen bg-slate-950 flex flex-col">
-            <header className="p-4 flex justify-between items-center border-b border-slate-800 shrink-0 bg-slate-950/70 backdrop-blur-sm sticky top-0 z-20">
-                <h1 className="text-2xl font-bold font-display tracking-widest uppercase">Roleplay <span className="text-sky-400">Nexus</span></h1>
-                <div className="flex items-center gap-2">
-                    <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".json" />
-                    <IconButton onClick={() => fileInputRef.current?.click()} icon="import" label="Import Characters" />
-                    <IconButton onClick={onNavigateToWorlds} icon="book-open" label="Worlds" />
-                    <IconButton onClick={onNavigateToHistory} icon="history" label="History" />
-                    <IconButton onClick={onNavigateToPersona} icon="character" label="My Persona" />
-                    <IconButton onClick={onNavigateToSettings} icon="sliders" label="Settings" />
-                    <IconButton onClick={onNavigateToDebug} icon="terminal" label="Debug Console" />
-                    <div className="h-6 w-px bg-slate-700 mx-1"></div>
-                    <button onClick={() => startChat(GM_CHARACTER_ID)} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600">
-                        <Icon name="play" className="w-4 h-4" /> Start GM Session
-                    </button>
-                    <IconButton onClick={onNavigateToGroupSetup} icon="add" label="Start Group Chat" primary />
-                </div>
-            </header>
-            <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-                {recentSessions.length > 0 && (
-                    <div className="mb-10">
-                        <h2 className="text-xl font-bold text-slate-200 mb-8 font-display tracking-wider uppercase">Recent Chats</h2>
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-x-6 gap-y-4">
-                           {recentSessions.map(session => (
-                             <RecentChatCard key={`${session.type}-${session.id}`} session={session} onClick={() => {
-                                if (session.type === 'single' && session.characterId) selectSession(session.characterId, session.id);
-                                else if (session.type === 'group') selectGroupSession(session.id);
-                             }} />
-                           ))}
-                           {totalRecentCount > RECENT_CHAT_LIMIT && <ViewAllHistoryCard onClick={onNavigateToHistory} />}
-                        </div>
-                    </div>
-                )}
-                
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-slate-200 font-display tracking-wider uppercase">Characters</h2>
-                    <div className="flex items-center gap-2">
-                        <div className="relative w-64">
-                            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" />
-                            <input 
-                                type="text" placeholder="Search characters..."
-                                className="w-full bg-slate-900 border-2 border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
-                                value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                        <select
-                            className="bg-slate-900 border-2 border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition appearance-none"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
-                            value={sortOrder}
-                            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                            aria-label="Sort characters"
-                        >
-                            <option value="last-played">Sort: Last Played</option>
-                            <option value="name-asc">Sort: Name (A-Z)</option>
-                            <option value="name-desc">Sort: Name (Z-A)</option>
-                        </select>
-                    </div>
-                </div>
-
-                {characters.length > 1 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                        <NewCharacterCard onClick={onNewCharacter} />
-                        {sortedAndFilteredCharacters.map(char => (
-                            <CharacterCard key={char.id} character={char} onChat={() => startChat(char.id)} onEdit={() => onEditCharacter(char)} onDelete={() => deleteCharacter(char.id)} onExport={() => handleExportCharacter(char)} onDuplicate={() => duplicateCharacter(char.id)} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 py-16">
-                        <Icon name="character" className="w-20 h-20 mb-4 text-slate-700" />
-                        <h2 className="text-3xl font-bold text-slate-300 font-display">WELCOME TO ROLEPLAY NEXUS</h2>
-                        <p className="max-w-sm mt-2">No characters found. Forge your first ally to begin the adventure.</p>
-                        <button onClick={onNewCharacter} className="flex items-center gap-2 px-5 py-3 mt-8 text-base font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-lg hover:shadow-sky-500/50 transition-all border border-sky-400/50">
-                            <Icon name="add" className="w-5 h-5"/> Create Your First Character
-                        </button>
-                    </div>
-                )}
-            </main>
-        </div>
+  const { recentSessions, totalRecentCount } = useMemo(() => {
+    // FIX: Added explicit type `[string, ChatSession[]]` to destructuring assignment to correctly type `sessions`.
+    const singleSessions = Object.entries(conversations).flatMap(
+      ([charId, sessions]: [string, ChatSession[]]) => {
+        const char = characters.find((c) => c.id === charId);
+        return char
+          ? sessions.map((s) => ({
+              type: 'single' as const,
+              id: s.id,
+              characterId: charId,
+              title: char.name,
+              avatars: [char.avatar],
+              lastMessage: s.messages[s.messages.length - 1]?.content || 'Chat started.',
+              timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
+            }))
+          : [];
+      },
     );
+
+    // FIX: Added explicit type `GroupChatSession` to `s` to correctly type the iterated object.
+    const groupSessions = Object.values(groupConversations).map(
+      (s: GroupChatSession) => {
+        const sessionChars = s.characterIds
+          .map((id) => characters.find((c) => c.id === id))
+          .filter(Boolean) as Character[];
+        return {
+          type: 'group' as const,
+          id: s.id,
+          title: s.title,
+          avatars: sessionChars.map((c) => c.avatar),
+          lastMessage:
+            s.messages[s.messages.length - 1]?.content || 'Group chat started.',
+          timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
+        };
+      },
+    );
+
+    const allSessions = [...singleSessions, ...groupSessions]
+      .filter((s) => s.timestamp > 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((s) => ({ ...s, lastMessageDate: formatRelativeTime(s.timestamp) }));
+
+    return {
+      recentSessions: allSessions.slice(0, RECENT_CHAT_LIMIT),
+      totalRecentCount: allSessions.length,
+    };
+  }, [characters, conversations, groupConversations]);
+
+  const userCharacters = useMemo(
+    () => characters.filter((c) => !c.isImmutable),
+    [characters],
+  );
+
+  const lastPlayedTimestamps = useMemo(() => {
+    const timestamps = new Map<string, number>();
+    // FIX: Added explicit type `[string, ChatSession[]]` to destructuring assignment to correctly type `sessions`.
+    Object.entries(conversations).forEach(
+      ([charId, sessions]: [string, ChatSession[]]) => {
+        let maxTimestamp = 0;
+        sessions.forEach((session) => {
+          if (session.messages.length > 0) {
+            const lastMessageTs =
+              session.messages[session.messages.length - 1]?.timestamp;
+            if (lastMessageTs && lastMessageTs > maxTimestamp) {
+              maxTimestamp = lastMessageTs;
+            }
+          }
+        });
+        if (maxTimestamp > 0) {
+          timestamps.set(charId, maxTimestamp);
+        }
+      },
+    );
+    return timestamps;
+  }, [conversations]);
+
+  const sortedAndFilteredCharacters = useMemo(() => {
+    return userCharacters
+      .filter((char) =>
+        char.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+      .sort((a, b) => {
+        switch (sortOrder) {
+          case 'name-asc':
+            return a.name.localeCompare(b.name);
+          case 'name-desc':
+            return b.name.localeCompare(a.name);
+          case 'last-played':
+          default:
+            const tsA = lastPlayedTimestamps.get(a.id) || 0;
+            const tsB = lastPlayedTimestamps.get(b.id) || 0;
+            return tsB - tsA;
+        }
+      });
+  }, [userCharacters, searchQuery, sortOrder, lastPlayedTimestamps]);
+
+  return (
+    <div className="w-full h-screen bg-slate-950 flex flex-col">
+      <header className="p-4 flex justify-between items-center border-b border-slate-800 shrink-0 bg-slate-950/70 backdrop-blur-sm sticky top-0 z-20">
+        <h1 className="text-2xl font-bold font-display tracking-widest uppercase">
+          Roleplay <span className="text-sky-400">Nexus</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileImport}
+            className="hidden"
+            accept=".json"
+          />
+          <IconButton
+            onClick={() => fileInputRef.current?.click()}
+            icon="import"
+            label="Import Characters"
+          />
+          <IconButton
+            onClick={onNavigateToWorlds}
+            icon="book-open"
+            label="Worlds"
+          />
+          <IconButton
+            onClick={onNavigateToHistory}
+            icon="history"
+            label="History"
+          />
+          <IconButton
+            onClick={onNavigateToPersona}
+            icon="character"
+            label="My Persona"
+          />
+          <IconButton onClick={onNavigateToSettings} icon="sliders" label="Settings" />
+          <IconButton
+            onClick={onNavigateToDebug}
+            icon="terminal"
+            label="Debug Console"
+          />
+          <div className="h-6 w-px bg-slate-700 mx-1"></div>
+          <button
+            onClick={() => startChat(GM_CHARACTER_ID)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"
+          >
+            <Icon name="play" className="w-4 h-4" /> Start GM Session
+          </button>
+          <IconButton
+            onClick={onNavigateToGroupSetup}
+            icon="add"
+            label="Start Group Chat"
+            primary
+          />
+        </div>
+      </header>
+      <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+        {recentSessions.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-xl font-bold text-slate-200 mb-8 font-display tracking-wider uppercase">
+              Recent Chats
+            </h2>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-x-6 gap-y-4">
+              {recentSessions.map((session) => (
+                <RecentChatCard
+                  key={`${session.type}-${session.id}`}
+                  session={session}
+                  onClick={() => {
+                    if (session.type === 'single' && session.characterId)
+                      selectSession(session.characterId, session.id);
+                    else if (session.type === 'group')
+                      selectGroupSession(session.id);
+                  }}
+                />
+              ))}
+              {totalRecentCount > RECENT_CHAT_LIMIT && (
+                <ViewAllHistoryCard onClick={onNavigateToHistory} />
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-slate-200 font-display tracking-wider uppercase">
+            Characters
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
+              <Icon
+                name="search"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none"
+              />
+              <input
+                type="text"
+                placeholder="Search characters..."
+                className="w-full bg-slate-900 border-2 border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <select
+              className="bg-slate-900 border-2 border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition appearance-none"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: '1.5em 1.5em',
+                paddingRight: '2.5rem',
+              }}
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              aria-label="Sort characters"
+            >
+              <option value="last-played">Sort: Last Played</option>
+              <option value="name-asc">Sort: Name (A-Z)</option>
+              <option value="name-desc">Sort: Name (Z-A)</option>
+            </select>
+          </div>
+        </div>
+
+        {characters.length > 1 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+            <NewCharacterCard onClick={onNewCharacter} />
+            {sortedAndFilteredCharacters.map((char) => (
+              <CharacterCard
+                key={char.id}
+                character={char}
+                onChat={() => startChat(char.id)}
+                onEdit={() => onEditCharacter(char)}
+                onDelete={() => deleteCharacter(char.id)}
+                onExport={() => handleExportCharacter(char)}
+                onDuplicate={() => duplicateCharacter(char.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 py-16">
+            <Icon name="character" className="w-20 h-20 mb-4 text-slate-700" />
+            <h2 className="text-3xl font-bold text-slate-300 font-display">
+              WELCOME TO ROLEPLAY NEXUS
+            </h2>
+            <p className="max-w-sm mt-2">
+              No characters found. Forge your first ally to begin the adventure.
+            </p>
+            <button
+              onClick={onNewCharacter}
+              className="flex items-center gap-2 px-5 py-3 mt-8 text-base font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-lg hover:shadow-sky-500/50 transition-all border border-sky-400/50"
+            >
+              <Icon name="add" className="w-5 h-5" /> Create Your First Character
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 };
 
 export default CharacterSelection;

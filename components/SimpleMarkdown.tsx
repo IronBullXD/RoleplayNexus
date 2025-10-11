@@ -13,29 +13,43 @@ const parseInlineMarkdown = (text: string): React.ReactNode[] => {
   // Split the string by the markdown delimiters. The capturing group in the regex
   // ensures that the delimiters are also included in the resulting array.
   const parts = text.split(markdownRegex);
-  
-  return parts.map((part, index) => {
-    if (!part) return null;
 
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{parseInlineMarkdown(part.slice(2, -2))}</strong>;
-    }
-    if (part.startsWith('__') && part.endsWith('__')) {
-      return <strong key={index}>{parseInlineMarkdown(part.slice(2, -2))}</strong>;
-    }
-    if (part.startsWith('~~') && part.endsWith('~~')) {
-      return <s key={index}>{parseInlineMarkdown(part.slice(2, -2))}</s>;
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      // This handles what was previously "actions" and is now standard italic.
-      return <em key={index} className="italic text-slate-400">{parseInlineMarkdown(part.slice(1, -1))}</em>;
-    }
-    if (part.startsWith('_') && part.endsWith('_')) {
-        return <em key={index} className="italic text-slate-400">{parseInlineMarkdown(part.slice(1, -1))}</em>;
-    }
+  return parts
+    .map((part, index) => {
+      if (!part) return null;
 
-    return part; // Plain text
-  }).filter(Boolean);
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return (
+          <strong key={index}>{parseInlineMarkdown(part.slice(2, -2))}</strong>
+        );
+      }
+      if (part.startsWith('__') && part.endsWith('__')) {
+        return (
+          <strong key={index}>{parseInlineMarkdown(part.slice(2, -2))}</strong>
+        );
+      }
+      if (part.startsWith('~~') && part.endsWith('~~')) {
+        return <s key={index}>{parseInlineMarkdown(part.slice(2, -2))}</s>;
+      }
+      if (part.startsWith('*') && part.endsWith('*')) {
+        // This handles what was previously "actions" and is now standard italic.
+        return (
+          <em key={index} className="italic text-slate-400">
+            {parseInlineMarkdown(part.slice(1, -1))}
+          </em>
+        );
+      }
+      if (part.startsWith('_') && part.endsWith('_')) {
+        return (
+          <em key={index} className="italic text-slate-400">
+            {parseInlineMarkdown(part.slice(1, -1))}
+          </em>
+        );
+      }
+
+      return part; // Plain text
+    })
+    .filter(Boolean);
 };
 
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
@@ -49,8 +63,9 @@ const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
     <>
       {lines.map((line, lineIndex) => {
         // Trim to correctly detect OOC messages that might have leading whitespace.
-        const isOoc = line.trim().startsWith('//') || line.trim().startsWith('(OOC:');
-        
+        const isOoc =
+          line.trim().startsWith('//') || line.trim().startsWith('(OOC:');
+
         if (isOoc) {
           return (
             <React.Fragment key={lineIndex}>

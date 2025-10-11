@@ -1,4 +1,3 @@
-// FIX: Added a default React import to resolve the "Cannot find namespace 'React'" error for `React.RefObject`.
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { Message } from '../types';
 

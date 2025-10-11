@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ReactNode } from 'react';
-import { Character, Message, Settings, View, ChatSession, GroupChatSession, World, Persona, LLMProvider, PromptAdherence } from '../types';
-import { DEFAULT_CHARACTER, DEFAULT_SETTINGS, DEFAULT_USER_PERSONA, GM_CHARACTER, GM_CHARACTER_ID, CRITICAL_RULES_PROMPT } from '../constants';
+import { Character, Message, Settings, View, ChatSession, GroupChatSession, World, Persona, LLMProvider } from '../types';
+import { DEFAULT_CHARACTER, DEFAULT_SETTINGS, DEFAULT_USER_PERSONA, GM_CHARACTER, GM_CHARACTER_ID } from '../constants';
 import { getChatCompletionStream, generateCharacterProfile as generateProfile, summarizeMessages } from '../services/llmService';
 import { logger } from '../services/logger';
 
@@ -86,7 +86,6 @@ interface AppActions {
     setContextSize: (contextSize: number) => void;
     setMaxOutputTokens: (maxOutputTokens: number) => void;
     setMemoryEnabled: (enabled: boolean) => void;
-    setPromptAdherence: (adherence: PromptAdherence) => void;
 
     // Character Management
     saveCharacter: (character: Character) => void;
@@ -373,7 +372,7 @@ export const useAppStore = create<AppState & AppActions>()(
           get().selectSession(id, mostRecent.id);
           return;
         }
-        const newSessionData: ChatSession = { id: crypto.randomUUID(), title: `New Chat - ${new Date().toLocaleString()}`, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false, promptAdherence: settings.promptAdherence };
+        const newSessionData: ChatSession = { id: crypto.randomUUID(), title: `New Chat - ${new Date().toLocaleString()}`, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false };
         if (character.greeting) newSessionData.messages.push({ id: crypto.randomUUID(), role: 'assistant', content: character.greeting, timestamp: Date.now() });
         set(state => ({
           conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), newSessionData] },
@@ -396,7 +395,7 @@ export const useAppStore = create<AppState & AppActions>()(
         if (!activeCharacterId) return;
         const character = characters.find(c => c.id === activeCharacterId);
         if (!character) return;
-        const newSessionData: ChatSession = { id: crypto.randomUUID(), title: `New Chat - ${new Date().toLocaleString()}`, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false, promptAdherence: settings.promptAdherence };
+        const newSessionData: ChatSession = { id: crypto.randomUUID(), title: `New Chat - ${new Date().toLocaleString()}`, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false };
         if (character.greeting) newSessionData.messages.push({ id: crypto.randomUUID(), role: 'assistant', content: character.greeting, timestamp: Date.now() });
         set(state => ({
             conversations: { ...state.conversations, [activeCharacterId]: [...(state.conversations[activeCharacterId] || []), newSessionData] },
@@ -440,7 +439,7 @@ export const useAppStore = create<AppState & AppActions>()(
           if (characterIds.length < 2 || !scenario.trim()) return;
           const participating = characters.filter(c => characterIds.includes(c.id));
           const title = participating.map(c => c.name).slice(0, 3).join(', ') + (participating.length > 3 ? '...' : '');
-          const newSessionData: GroupChatSession = { id: crypto.randomUUID(), title, characterIds, scenario, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false, promptAdherence: settings.promptAdherence };
+          const newSessionData: GroupChatSession = { id: crypto.randomUUID(), title, characterIds, scenario, messages: [], worldId: settings.worldId, temperature: settings.temperature, thinkingEnabled: settings.thinkingEnabled, contextSize: settings.contextSize, maxOutputTokens: settings.maxOutputTokens, memoryEnabled: false };
           set(state => ({
               groupConversations: { ...state.groupConversations, [newSessionData.id]: newSessionData },
               activeGroupSessionId: newSessionData.id,
@@ -487,7 +486,6 @@ export const useAppStore = create<AppState & AppActions>()(
       setContextSize: (contextSize) => get().updateActiveSessionSettings({ contextSize }),
       setMaxOutputTokens: (maxOutputTokens) => get().updateActiveSessionSettings({ maxOutputTokens }),
       setMemoryEnabled: (memoryEnabled) => get().updateActiveSessionSettings({ memoryEnabled }),
-      setPromptAdherence: (promptAdherence) => get().updateActiveSessionSettings({ promptAdherence }),
 
       updateActiveSessionSettings: (update) => {
         const { activeCharacterId, activeSessionId, activeGroupSessionId } = get();
@@ -555,7 +553,10 @@ export const useAppStore = create<AppState & AppActions>()(
         const char = characters.find(c => c.id === activeCharacterId);
         const session = conversations[activeCharacterId || '']?.find(s => s.id === activeSessionId);
         if (!char || !session || session.messages.length === 0 || isLoading) return;
-        await get().runChatCompletion(char, session, session.messages);
+        const lastMessage = session.messages[session.messages.length - 1];
+        if (lastMessage?.role !== 'assistant') return;
+        const messagesToResend = session.messages.slice(0, -1);
+        await get().runChatCompletion(char, session, messagesToResend);
       },
 
       sendGroupMessage: async (content) => {
@@ -603,7 +604,10 @@ export const useAppStore = create<AppState & AppActions>()(
         const { groupConversations, activeGroupSessionId, isLoading } = get();
         const session = groupConversations[activeGroupSessionId || ''];
         if (!session || session.messages.length === 0 || isLoading) return;
-        await get().runGroupChatCompletion(session, session.messages);
+        const lastMessage = session.messages[session.messages.length - 1];
+        if (lastMessage?.role !== 'assistant') return;
+        const messagesToResend = session.messages.slice(0, -1);
+        await get().runGroupChatCompletion(session, messagesToResend);
       },
 
       // --- Core Chat Logic ---
@@ -666,7 +670,6 @@ export const useAppStore = create<AppState & AppActions>()(
                 world: worlds.find(w => w.id === session.worldId), temperature: session.temperature ?? settings.temperature,
                 prefill, signal: abortController.signal, thinkingEnabled: session.thinkingEnabled ?? settings.thinkingEnabled,
                 contextSize: session.contextSize ?? settings.contextSize, maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens, memorySummary: updatedSummary,
-                promptAdherence: session.promptAdherence ?? settings.promptAdherence,
             });
 
             let lastRenderTime = Date.now();
@@ -743,7 +746,6 @@ export const useAppStore = create<AppState & AppActions>()(
                 globalSystemPrompt: settings.systemPrompt, world: worlds.find(w => w.id === session.worldId), temperature: session.temperature ?? settings.temperature,
                 prefill, signal: abortController.signal, thinkingEnabled: session.thinkingEnabled ?? settings.thinkingEnabled,
                 contextSize: session.contextSize ?? settings.contextSize, maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens, memorySummary: updatedSummary,
-                promptAdherence: session.promptAdherence ?? settings.promptAdherence,
             });
 
             let lastRenderTime = Date.now();
