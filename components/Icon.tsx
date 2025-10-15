@@ -40,6 +40,7 @@ import {
   LucideProps,
   ShieldCheck,
   Lightbulb,
+  Palette,
 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -85,6 +86,7 @@ const icons: { [key: string]: LucideIconComponent } = {
   'alert-triangle': AlertTriangle,
   'shield-check': ShieldCheck,
   lightbulb: Lightbulb,
+  palette: Palette,
 };
 
 interface IconProps extends LucideProps {

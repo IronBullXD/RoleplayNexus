@@ -1,4 +1,5 @@
-import { World, WorldEntry, ValidationIssue } from '../types';
+import { World, WorldEntry, ValidationIssue, LLMProvider } from '../types';
+import { checkForInconsistencies } from './llmService';
 
 const MIN_CONTENT_LENGTH = 50; // characters
 
@@ -96,4 +97,30 @@ export function validateWorld(world: World): ValidationIssue[] {
 
 
   return issues;
+}
+
+
+export async function runConsistencyCheck({
+    world,
+    provider,
+    apiKey,
+    model
+}: {
+    world: World,
+    provider: LLMProvider,
+    apiKey: string,
+    model: string
+}): Promise<ValidationIssue[]> {
+    if (!world.entries || world.entries.filter(e => e.enabled).length < 2) {
+        return [];
+    }
+
+    const reports = await checkForInconsistencies({ world, provider, apiKey, model });
+    
+    return reports.map(report => ({
+        type: 'Contradiction',
+        severity: 'warning',
+        message: report.explanation,
+        entryIds: report.conflictingEntryIds,
+    }));
 }

@@ -42,7 +42,7 @@ export const ActionButton: React.FC<{
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className={`p-1.5 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors ${className}`}
+        className={`p-1 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors ${className}`}
         aria-label={label}
       >
         <Icon name={icon} className="w-4 h-4" />
@@ -50,16 +50,3 @@ export const ActionButton: React.FC<{
     </Tooltip>
   );
 };
-
-export const TypingIndicator: React.FC = () => (
-  <div className="flex items-start gap-4 my-5 animate-fade-in">
-    <div className="w-10 h-10 shrink-0"></div>
-    <div className="p-4 rounded-xl bg-slate-800">
-      <div className="flex items-center space-x-1.5">
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
-      </div>
-    </div>
-  </div>
-);

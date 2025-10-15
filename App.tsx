@@ -1,21 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { Character } from './types';
-import ChatWindow from './components/ChatWindow';
-import CharacterEditor from './components/CharacterEditor';
-import CharacterSelection from './components/CharacterSelection';
-import SettingsModal from './components/SettingsModal';
-import HistoryModal from './components/HistoryModal';
-import GroupChatSetup from './components/GroupChatSetup';
-import GroupChatWindow from './components/GroupChatWindow';
-import WorldsPage from './components/WorldsPage';
-import ConfirmationModal from './components/ConfirmationModal';
-import PersonaEditor from './components/PersonaEditor';
-import DebugWindow from './components/DebugWindow';
 import { logger } from './services/logger';
 import { AnimatePresence } from 'framer-motion';
 import BackgroundAnimation from './components/BackgroundAnimation';
 import ComponentErrorBoundary from './components/ComponentErrorBoundary';
+import ThemeApplicator from './components/ThemeApplicator';
+import LoadingIndicator from './components/LoadingIndicator';
+
+// --- Lazy Loaded Components ---
+const ChatWindow = lazy(() => import('./components/ChatWindow'));
+const CharacterEditor = lazy(() => import('./components/CharacterEditor'));
+const CharacterSelection = lazy(() => import('./components/CharacterSelection'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const HistoryModal = lazy(() => import('./components/HistoryModal'));
+const GroupChatSetup = lazy(() => import('./components/GroupChatSetup'));
+const GroupChatWindow = lazy(() => import('./components/GroupChatWindow'));
+const WorldsPage = lazy(() => import('./components/WorldsPage'));
+const ConfirmationModal = lazy(() => import('./components/ConfirmationModal'));
+const PersonaEditor = lazy(() => import('./components/PersonaEditor'));
+const DebugWindow = lazy(() => import('./components/DebugWindow'));
 
 function App() {
   const {
@@ -126,63 +130,80 @@ function App() {
 
   return (
     <div className="h-screen w-full text-slate-100 font-sans overflow-hidden relative">
+      <ThemeApplicator />
       <BackgroundAnimation />
       <ComponentErrorBoundary componentName="Main View">
-        {renderView()}
+        <Suspense fallback={<LoadingIndicator fullscreen message="Loading View..." />}>
+          {renderView()}
+        </Suspense>
       </ComponentErrorBoundary>
 
       {/* --- Modals --- */}
       <AnimatePresence>
         {modals.characterEditor && (
-          <ComponentErrorBoundary componentName="Character Editor Modal">
-            <CharacterEditor
-              character={editingCharacter}
-              onClose={() => closeModal('characterEditor')}
-            />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Character Editor Modal">
+              <CharacterEditor
+                character={editingCharacter}
+                onClose={() => closeModal('characterEditor')}
+              />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {modals.personaEditor && (
-          <ComponentErrorBoundary componentName="Persona Editor Modal">
-            <PersonaEditor
-              persona={userPersona}
-              onClose={() => closeModal('personaEditor')}
-            />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Persona Editor Modal">
+              <PersonaEditor
+                persona={userPersona}
+                onClose={() => closeModal('personaEditor')}
+              />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {modals.settings && (
-          <ComponentErrorBoundary componentName="Settings Modal">
-            <SettingsModal onClose={() => closeModal('settings')} />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Settings Modal">
+              <SettingsModal onClose={() => closeModal('settings')} />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {modals.history && (
-          <ComponentErrorBoundary componentName="History Modal">
-            <HistoryModal onClose={() => closeModal('history')} />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="History Modal">
+              <HistoryModal onClose={() => closeModal('history')} />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {modals.worlds && (
-          <ComponentErrorBoundary componentName="Worlds Modal">
-            <WorldsPage worlds={worlds} onClose={() => closeModal('worlds')} />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Worlds Modal">
+              <WorldsPage worlds={worlds} onClose={() => closeModal('worlds')} />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {isConfirmationModalOpen && (
-          <ComponentErrorBoundary componentName="Confirmation Modal">
-            <ConfirmationModal
-              onClose={handleCloseConfirmation}
-              onConfirm={handleConfirm}
-              title={confirmationAction?.title || ''}
-              message={confirmationAction?.message || ''}
-              confirmButtonText={confirmationAction?.confirmText}
-              confirmButtonVariant={confirmationAction?.confirmVariant}
-            />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Confirmation Modal">
+              <ConfirmationModal
+                onClose={handleCloseConfirmation}
+                onConfirm={handleConfirm}
+                title={confirmationAction?.title || ''}
+                message={confirmationAction?.message || ''}
+                confirmButtonText={confirmationAction?.confirmText}
+                confirmButtonVariant={confirmationAction?.confirmVariant}
+              />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
         {modals.debug && (
-          <ComponentErrorBoundary componentName="Debug Window Modal">
-            <DebugWindow
-              onClose={() => closeModal('debug')}
-              appState={getAppState()}
-            />
-          </ComponentErrorBoundary>
+          <Suspense fallback={null}>
+            <ComponentErrorBoundary componentName="Debug Window Modal">
+              <DebugWindow
+                onClose={() => closeModal('debug')}
+                appState={getAppState()}
+              />
+            </ComponentErrorBoundary>
+          </Suspense>
         )}
       </AnimatePresence>
     </div>

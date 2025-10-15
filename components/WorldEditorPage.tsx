@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { World, WorldEntry, WorldEntryCategory, ValidationIssue } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
 import { motion, AnimatePresence } from 'framer-motion';
-import { validateWorld } from '../services/worldValidationService';
+import { validateWorld, runConsistencyCheck } from '../services/worldValidationService';
 import ValidationResultsPanel from './ValidationResultsPanel';
+import { LLMProvider } from '../types';
 
 interface WorldEditorPageProps {
   world: Partial<World> | null;
@@ -40,6 +41,54 @@ interface EntryEditorProps {
     value: WorldEntry[K],
   ) => void;
 }
+
+const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
+  entry: WorldEntry;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (e: React.MouseEvent, id: string, name: string) => void;
+}) => {
+  const handleSelect = useCallback(() => onSelect(entry.id), [onSelect, entry.id]);
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete(e, entry.id, entry.name || 'Unnamed Entry');
+  }, [onDelete, entry.id, entry.name]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleSelect}
+      className={`w-full text-left p-2 rounded-md flex items-center justify-between group ${
+        isActive ? 'bg-crimson-600/20' : 'hover:bg-slate-800/70'
+      }`}
+    >
+      <span
+        className={`flex-1 truncate text-sm ${
+          isActive ? 'text-crimson-300 font-semibold' : 'text-slate-300'
+        }`}
+      >
+        {entry.name || 'Unnamed Entry'}
+      </span>
+      <div className="flex items-center">
+        {!entry.enabled && (
+          <Tooltip content="Disabled" position="top">
+            <Icon
+              name="minus-square"
+              className="w-4 h-4 text-slate-500 mr-2"
+            />
+          </Tooltip>
+        )}
+        <button
+          onClick={handleDelete}
+          className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label={`Delete entry ${entry.name || 'Unnamed Entry'}`}
+        >
+          <Icon name="delete" className="w-4 h-4" />
+        </button>
+      </div>
+    </button>
+  );
+});
 
 const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
   entry,
@@ -363,7 +412,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   onSave,
   onClose,
 }) => {
-  const { requestConfirmation } = useAppStore();
+  const { requestConfirmation, settings } = useAppStore();
   const [formData, setFormData] = useState<Partial<World>>({
     name: '',
     avatar: '',
@@ -375,6 +424,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   const [entrySearch, setEntrySearch] = useState('');
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
+  const [includeAiCheck, setIncludeAiCheck] = useState(false);
+  const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
+
 
   useEffect(() => {
     if (world) {
@@ -454,29 +506,38 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     setActiveEntryId(newEntry.id);
   };
 
-  const handleDeleteEntry = (e: React.MouseEvent, entryId: string) => {
-    e.stopPropagation();
-    const entry = formData.entries?.find((e) => e.id === entryId);
-    if (!entry) return;
-    requestConfirmation(
-      () => {
-        setFormData((prev) => {
-          const newEntries = (prev.entries || []).filter(
-            (e) => e.id !== entryId,
-          );
-          if (activeEntryId === entryId)
-            setActiveEntryId(newEntries.length > 0 ? newEntries[0].id : null);
-          return { ...prev, entries: newEntries };
-        });
-      },
-      'Delete Entry',
-      `Are you sure you want to delete "${
-        entry.name || 'Unnamed Entry'
-      }"?`,
-      'Delete',
-      'danger',
-    );
-  };
+  const handleSelectEntry = useCallback((id: string) => {
+    setActiveEntryId(id);
+  }, []);
+  
+  const handleDeleteEntry = useCallback(
+    (e: React.MouseEvent, entryId: string, entryName: string) => {
+      e.stopPropagation();
+      requestConfirmation(
+        () => {
+          setFormData((prev) => {
+            const newEntries = (prev.entries || []).filter(
+              (e) => e.id !== entryId,
+            );
+            setActiveEntryId((currentActiveId) => {
+              if (currentActiveId === entryId) {
+                return newEntries.length > 0 ? newEntries[0].id : null;
+              }
+              return currentActiveId;
+            });
+            return { ...prev, entries: newEntries };
+          });
+        },
+        'Delete Entry',
+        `Are you sure you want to delete "${
+          entryName || 'Unnamed Entry'
+        }"?`,
+        'Delete',
+        'danger',
+      );
+    },
+    [requestConfirmation],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -497,15 +558,44 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isValidationPanelOpen) onClose();
+      if (e.key === 'Escape' && !isValidationPanelOpen && !isCheckingConsistency) onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isValidationPanelOpen]);
+  }, [onClose, isValidationPanelOpen, isCheckingConsistency]);
 
-  const handleValidate = () => {
-    const issues = validateWorld(formData as World);
-    setValidationIssues(issues);
+  const handleValidate = async () => {
+    const currentWorld = formData as World;
+    const localIssues = validateWorld(currentWorld);
+    let allIssues = [...localIssues];
+    
+    if (includeAiCheck) {
+        setIsCheckingConsistency(true);
+        try {
+            const { provider, apiKeys, models } = settings;
+            const apiKey = provider === LLMProvider.GEMINI ? (process.env.API_KEY || '') : apiKeys[provider];
+            const model = models?.[provider];
+            if (!model || !apiKey) {
+                throw new Error(`API key or model is not configured for ${provider}. Please check your settings.`);
+            }
+
+            const aiIssues = await runConsistencyCheck({ world: currentWorld, provider, apiKey, model });
+            allIssues = [...allIssues, ...aiIssues];
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            const errorIssue: ValidationIssue = {
+                type: 'Contradiction',
+                severity: 'error',
+                message: `AI consistency check failed: ${errorMessage}`,
+                entryIds: []
+            };
+            allIssues.push(errorIssue);
+        } finally {
+            setIsCheckingConsistency(false);
+        }
+    }
+    
+    setValidationIssues(allIssues);
     setIsValidationPanelOpen(true);
   };
 
@@ -633,42 +723,13 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                         </h3>
                         <div className="space-y-1 mt-1">
                           {entries.map((entry) => (
-                            <button
-                              type="button"
+                            <EntryListItem
                               key={entry.id}
-                              onClick={() => setActiveEntryId(entry.id)}
-                              className={`w-full text-left p-2 rounded-md flex items-center justify-between group ${
-                                activeEntryId === entry.id
-                                  ? 'bg-crimson-600/20'
-                                  : 'hover:bg-slate-800/70'
-                              }`}
-                            >
-                              <span
-                                className={`flex-1 truncate text-sm ${
-                                  activeEntryId === entry.id
-                                    ? 'text-crimson-300 font-semibold'
-                                    : 'text-slate-300'
-                                }`}
-                              >
-                                {entry.name || 'Unnamed Entry'}
-                              </span>
-                              <div className="flex items-center">
-                                {!entry.enabled && (
-                                  <Tooltip content="Disabled" position="top">
-                                    <Icon
-                                      name="minus-square"
-                                      className="w-4 h-4 text-slate-500 mr-2"
-                                    />
-                                  </Tooltip>
-                                )}
-                                <button
-                                  onClick={(e) => handleDeleteEntry(e, entry.id)}
-                                  className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                >
-                                  <Icon name="delete" className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </button>
+                              entry={entry}
+                              isActive={activeEntryId === entry.id}
+                              onSelect={handleSelectEntry}
+                              onDelete={handleDeleteEntry}
+                            />
                           ))}
                         </div>
                       </div>
@@ -743,13 +804,27 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
               </aside>
             </div>
             <footer className="p-4 border-t border-slate-800 flex justify-between items-center shrink-0">
-              <button
-                type="button"
-                onClick={handleValidate}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"
-              >
-                <Icon name="shield-check" className="w-4 h-4" /> Validate World
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleValidate}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"
+                >
+                  <Icon name="shield-check" className="w-4 h-4" /> Validate World
+                </button>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white">
+                    <input 
+                        type="checkbox"
+                        checked={includeAiCheck}
+                        onChange={e => setIncludeAiCheck(e.target.checked)}
+                        className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-crimson-500 focus:ring-crimson-500"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      <Icon name="brain" className="w-4 h-4 text-purple-400" />
+                      Include AI Consistency Check
+                    </span>
+                </label>
+              </div>
               <div className="flex items-center space-x-3">
                 <button
                   type="button"
@@ -769,6 +844,23 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
           </form>
         </motion.div>
       </motion.div>
+
+      <AnimatePresence>
+        {isCheckingConsistency && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-950/80 flex flex-col items-center justify-center z-[70] backdrop-blur-sm gap-4"
+            >
+              <Icon name="redo" className="w-10 h-10 text-crimson-400 animate-spin" />
+              <p className="text-lg font-display tracking-wider uppercase text-slate-300">
+                AI is checking for inconsistencies...
+              </p>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {isValidationPanelOpen && (
           <ValidationResultsPanel 
@@ -776,6 +868,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
             onClose={() => setIsValidationPanelOpen(false)}
             onSelectEntry={handleSelectEntryFromIssue}
             worldName={formData.name || 'Unnamed World'}
+            entries={formData.entries || []}
           />
         )}
       </AnimatePresence>

@@ -180,4 +180,4 @@ const SimpleMarkdown: React.FC<{ text: string; world?: World | null }> = ({
   return <>{content}</>;
 };
 
-export default SimpleMarkdown;
+export default React.memo(SimpleMarkdown);

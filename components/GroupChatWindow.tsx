@@ -18,8 +18,8 @@ import {
   DateSeparator,
   SystemMessage,
   ActionButton,
-  TypingIndicator,
 } from './ChatCommon';
+import ChatMessageSkeleton from './ChatMessageSkeleton';
 
 interface GroupChatWindowProps {
   onNavigateToHistory: () => void;
@@ -54,7 +54,7 @@ interface EditableGroupChatMessageProps {
   world: World | null;
 }
 
-function EditableGroupChatMessage({
+const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
   message,
   characterMap,
   userPersona,
@@ -137,82 +137,18 @@ function EditableGroupChatMessage({
           </p>
         )}
         <div
-          className={`flex items-start gap-2 ${
-            isUser ? 'flex-row-reverse' : ''
+          className={`p-4 rounded-2xl max-w-2xl lg:max-w-3xl relative ${
+            isUser
+              ? 'bg-slate-700 text-white rounded-tr-lg chat-bubble-right'
+              : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
           }`}
         >
-          <div
-            className={`p-4 rounded-2xl max-w-2xl lg:max-w-3xl relative ${
-              isUser
-                ? 'bg-slate-700 text-white rounded-tr-lg chat-bubble-right'
-                : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
-            }`}
-          >
-            {isEditing ? (
-              <div className="animate-fade-in" style={{ minWidth: '150px' }}>
-                <div className="grid">
-                  <div
-                    aria-hidden="true"
-                    className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-relaxed"
-                  >
-                    {editingText || ' '}
-                    {'\u00A0'}
-                  </div>
-                  <textarea
-                    ref={editTextAreaRef}
-                    value={editingText}
-                    onChange={(e) => onSetEditingText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-relaxed ${
-                      isUser ? 'text-white' : 'text-slate-200'
-                    }`}
-                    rows={1}
-                    spellCheck={false}
-                  />
-                </div>
-                <div
-                  className={`flex justify-end gap-2 items-center pt-2 mt-2 border-t ${
-                    isUser ? 'border-white/20' : 'border-slate-700/50'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={onCancelEdit}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                      isUser
-                        ? 'text-white bg-white/10 hover:bg-white/20'
-                        : 'text-slate-300 bg-slate-700/50 hover:bg-slate-700'
-                    }`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onSaveEdit}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                      isUser
-                        ? 'text-crimson-600 bg-white hover:bg-slate-200'
-                        : 'text-white bg-crimson-600 hover:bg-crimson-500'
-                    }`}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
-                <SimpleMarkdown text={message.content} world={world} />
-                {isLastMessage &&
-                  isLoading &&
-                  message.role === 'assistant' && (
-                    <span className="inline-block w-1 h-4 bg-slate-400 ml-1 animate-pulse" />
-                  )}
-              </div>
-            )}
-          </div>
-
           {!isEditing && (
-            <div className="flex flex-col items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pt-2 gap-1">
+            <div
+              className={`absolute flex items-center gap-0.5 p-1 bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
+                isUser ? 'left-4 -top-4' : 'right-4 -top-4'
+              }`}
+            >
               <ActionButton
                 icon="fork"
                 label="Fork Chat"
@@ -239,11 +175,70 @@ function EditableGroupChatMessage({
               )}
             </div>
           )}
+          {isEditing ? (
+            <div className="animate-fade-in" style={{ minWidth: '150px' }}>
+              <div className="grid">
+                <div
+                  aria-hidden="true"
+                  className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-relaxed"
+                >
+                  {editingText || ' '}
+                  {'\u00A0'}
+                </div>
+                <textarea
+                  ref={editTextAreaRef}
+                  value={editingText}
+                  onChange={(e) => onSetEditingText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-relaxed ${
+                    isUser ? 'text-white' : 'text-slate-200'
+                  }`}
+                  rows={1}
+                  spellCheck={false}
+                />
+              </div>
+              <div
+                className={`flex justify-end gap-2 items-center pt-2 mt-2 border-t ${
+                  isUser ? 'border-white/20' : 'border-slate-700/50'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={onCancelEdit}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    isUser
+                      ? 'text-white bg-white/10 hover:bg-white/20'
+                      : 'text-slate-300 bg-slate-700/50 hover:bg-slate-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onSaveEdit}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    isUser
+                      ? 'text-crimson-600 bg-white hover:bg-slate-200'
+                      : 'text-white bg-crimson-600 hover:bg-crimson-500'
+                  }`}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
+              <SimpleMarkdown text={message.content} world={world} />
+              {isLastMessage && isLoading && message.role === 'assistant' && (
+                <span className="inline-block w-1 h-4 bg-slate-400 ml-1 animate-pulse" />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-}
+});
 
 function formatRelativeTime(timestamp: number): string {
   const now = new Date();
@@ -529,7 +524,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
               />
             </React.Fragment>
           ))}
-          {showTypingIndicator && <TypingIndicator />}
+          {showTypingIndicator && <ChatMessageSkeleton />}
           <div ref={messagesEndRef} />
         </div>
       </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { ValidationIssue } from '../types';
+import React, { useMemo } from 'react';
+import { ValidationIssue, WorldEntry } from '../types';
 import { Icon } from './Icon';
 import { motion } from 'framer-motion';
 
@@ -8,6 +8,7 @@ interface ValidationResultsPanelProps {
   onClose: () => void;
   onSelectEntry: (entryId: string) => void;
   worldName: string;
+  entries: WorldEntry[];
 }
 
 const issueMetadata = {
@@ -16,9 +17,14 @@ const issueMetadata = {
   MissingName: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Missing Entry Names' },
   ShortContent: { icon: 'lightbulb', color: 'text-sky-400', title: 'Short Content' },
   OverlappingKeyword: { icon: 'lightbulb', color: 'text-sky-400', title: 'Overlapping Keywords' },
+  Contradiction: { icon: 'brain', color: 'text-purple-400', title: 'AI-Detected Inconsistencies' },
 };
 
-const ValidationResultsPanel: React.FC<ValidationResultsPanelProps> = ({ issues, onClose, onSelectEntry, worldName }) => {
+const ValidationResultsPanel: React.FC<ValidationResultsPanelProps> = ({ issues, onClose, onSelectEntry, worldName, entries }) => {
+
+  const entryNameMap = useMemo(() => 
+    new Map(entries.map(e => [e.id, e.name || 'Unnamed Entry']))
+  , [entries]);
 
   const groupedIssues = issues.reduce((acc, issue) => {
     if (!acc[issue.type]) {
@@ -74,21 +80,24 @@ const ValidationResultsPanel: React.FC<ValidationResultsPanelProps> = ({ issues,
               <p className="text-slate-400">Found {issues.length} potential issue(s). These are suggestions to improve consistency and may not need to be fixed.</p>
               {issueTypes.map(type => (
                 <div key={type}>
-                  <h3 className={`flex items-center gap-2 text-lg font-semibold font-display tracking-wider ${issueMetadata[type].color}`}>
-                    <Icon name={issueMetadata[type].icon} className="w-5 h-5" />
-                    {issueMetadata[type].title} ({groupedIssues[type].length})
+                  <h3 className={`flex items-center gap-2 text-lg font-semibold font-display tracking-wider ${(issueMetadata[type] || {}).color || 'text-slate-100'}`}>
+                    <Icon name={(issueMetadata[type] || {}).icon || 'bug'} className="w-5 h-5" />
+                    {(issueMetadata[type] || {}).title || type} ({groupedIssues[type].length})
                   </h3>
                   <div className="mt-3 space-y-2 border-l-2 border-slate-700 pl-4">
                     {groupedIssues[type].map((issue, index) => (
-                      <div key={index} className="p-3 bg-slate-800/50 rounded-md">
-                        <p className="text-sm text-slate-300">{issue.message}</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <button 
-                            onClick={() => onSelectEntry(issue.entryIds[0])}
-                            className="px-2 py-1 text-xs font-semibold text-sky-300 bg-sky-900/50 rounded-md hover:bg-sky-800/50"
-                           >
-                            Go to Entry
-                          </button>
+                      <div key={index} className={`p-3 rounded-md ${issue.severity === 'error' ? 'bg-red-900/50' : 'bg-slate-800/50'}`}>
+                        <p className={`text-sm ${issue.severity === 'error' ? 'text-red-300' : 'text-slate-300'}`}>{issue.message}</p>
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          {issue.entryIds.map(id => (
+                            <button 
+                              key={id}
+                              onClick={() => onSelectEntry(id)}
+                              className="px-2 py-1 text-xs font-semibold text-sky-300 bg-sky-900/50 rounded-md hover:bg-sky-800/50"
+                             >
+                              Go to: "{entryNameMap.get(id) || 'Unknown Entry'}"
+                            </button>
+                          ))}
                         </div>
                       </div>
                     ))}

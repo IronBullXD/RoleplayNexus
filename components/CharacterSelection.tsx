@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { Character, ChatSession, GroupChatSession } from '../types';
 import { Icon, IconButton } from './Icon';
 import SimpleMarkdown from './SimpleMarkdown';
@@ -123,12 +123,12 @@ function ViewAllHistoryCard({ onClick }: { onClick: () => void }) {
 
 const CharacterCard: React.FC<{
   character: Character;
-  onChat: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onExport: () => void;
-  onDuplicate: () => void;
-}> = ({ character, onChat, onEdit, onDelete, onExport, onDuplicate }) => {
+  onChat: (id: string) => void;
+  onEdit: (character: Character) => void;
+  onDelete: (id: string) => void;
+  onExport: (character: Character) => void;
+  onDuplicate: (id: string) => void;
+}> = React.memo(({ character, onChat, onEdit, onDelete, onExport, onDuplicate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -189,7 +189,7 @@ const CharacterCard: React.FC<{
       </div>
 
       <button
-        onClick={onChat}
+        onClick={() => onChat(character.id)}
         className="absolute inset-0 z-20"
         aria-label={`Chat with ${character.name}`}
       />
@@ -212,25 +212,25 @@ const CharacterCard: React.FC<{
           {isMenuOpen && (
             <div className="absolute right-0 mt-2 w-40 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-md shadow-xl z-30 py-1 animate-fade-in">
               <button
-                onClick={() => handleMenuAction(onEdit)}
+                onClick={() => handleMenuAction(() => onEdit(character))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
               >
                 <Icon name="edit" className="w-4 h-4" /> Edit
               </button>
               <button
-                onClick={() => handleMenuAction(onDuplicate)}
+                onClick={() => handleMenuAction(() => onDuplicate(character.id))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
               >
                 <Icon name="duplicate" className="w-4 h-4" /> Duplicate
               </button>
               <button
-                onClick={() => handleMenuAction(onExport)}
+                onClick={() => handleMenuAction(() => onExport(character))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
               >
                 <Icon name="export" className="w-4 h-4" /> Export
               </button>
               <button
-                onClick={() => handleMenuAction(onDelete)}
+                onClick={() => handleMenuAction(() => onDelete(character.id))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-ember-400 hover:bg-slate-700/50 transition-colors"
               >
                 <Icon name="delete" className="w-4 h-4" /> Delete
@@ -241,7 +241,7 @@ const CharacterCard: React.FC<{
       )}
     </div>
   );
-};
+});
 
 function NewCharacterCard({ onClick }: { onClick: () => void }) {
   return (
@@ -313,7 +313,7 @@ function CharacterSelection({
     }
   };
 
-  const handleExportCharacter = (character: Character) => {
+  const handleExportCharacter = useCallback((character: Character) => {
     try {
       const filename = `${character.name
         .replace(/[^a-z0-9]/gi, '_')
@@ -334,7 +334,7 @@ function CharacterSelection({
         }`,
       );
     }
-  };
+  }, []);
 
   const { recentSessions, totalRecentCount } = useMemo(() => {
     const singleSessions = Object.entries(conversations).flatMap(
@@ -430,6 +430,13 @@ function CharacterSelection({
         }
       });
   }, [userCharacters, searchQuery, sortOrder, lastPlayedTimestamps]);
+
+  const handleEdit = useCallback(
+    (character: Character) => {
+      onEditCharacter(character);
+    },
+    [onEditCharacter],
+  );
 
   return (
     <div className="w-full h-screen bg-transparent flex flex-col">
@@ -561,11 +568,11 @@ function CharacterSelection({
               <CharacterCard
                 key={char.id}
                 character={char}
-                onChat={() => startChat(char.id)}
-                onEdit={() => onEditCharacter(char)}
-                onDelete={() => deleteCharacter(char.id)}
-                onExport={() => handleExportCharacter(char)}
-                onDuplicate={() => duplicateCharacter(char.id)}
+                onChat={startChat}
+                onEdit={handleEdit}
+                onDelete={deleteCharacter}
+                onExport={handleExportCharacter}
+                onDuplicate={duplicateCharacter}
               />
             ))}
           </div>

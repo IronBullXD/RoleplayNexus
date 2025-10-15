@@ -9,6 +9,38 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Exo+2:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        /* Default Theme: Cyber Noir (based on original colors) */
+        --color-slate-100: 241 242 245;
+        --color-slate-200: 224 227 233;
+        --color-slate-300: 193 198 212;
+        --color-slate-400: 144 150 168;
+        --color-slate-500: 103 109 129;
+        --color-slate-600: 72 76 94;
+        --color-slate-700: 44 47 61;
+        --color-slate-800: 24 26 35;
+        --color-slate-900: 10 11 15;
+        --color-slate-950: 2 3 5;
+        
+        --color-crimson-200: 254 202 202;
+        --color-crimson-300: 252 165 165;
+        --color-crimson-400: 248 113 113;
+        --color-crimson-500: 239 68 68;
+        --color-crimson-600: 220 38 38;
+        --color-crimson-700: 185 28 28;
+        --color-crimson-800: 153 27 27;
+        --color-crimson-900: 127 29 29;
+
+        --color-ember-300: 253 186 116;
+        --color-ember-400: 251 146 60;
+        --color-ember-500: 249 115 22;
+        --color-ember-600: 234 88 12;
+        --color-ember-700: 194 65 12;
+        --color-ember-800: 154 52 18;
+        --color-ember-900: 124 45 18;
+      }
+    </style>
     <script>
       tailwind.config = {
         theme: {
@@ -19,35 +51,35 @@
             },
             colors: {
               slate: {
-                950: '#020305', // Obsidian Black
-                900: '#0A0B0F',
-                800: '#181A23',
-                700: '#2C2F3D',
-                600: '#484C5E',
-                500: '#676D81',
-                400: '#9096A8',
-                300: '#C1C6D4',
-                200: '#E0E3E9',
-                100: '#F1F2F5',
+                100: 'rgb(var(--color-slate-100) / <alpha-value>)',
+                200: 'rgb(var(--color-slate-200) / <alpha-value>)',
+                300: 'rgb(var(--color-slate-300) / <alpha-value>)',
+                400: 'rgb(var(--color-slate-400) / <alpha-value>)',
+                500: 'rgb(var(--color-slate-500) / <alpha-value>)',
+                600: 'rgb(var(--color-slate-600) / <alpha-value>)',
+                700: 'rgb(var(--color-slate-700) / <alpha-value>)',
+                800: 'rgb(var(--color-slate-800) / <alpha-value>)',
+                900: 'rgb(var(--color-slate-900) / <alpha-value>)',
+                950: 'rgb(var(--color-slate-950) / <alpha-value>)',
               },
               crimson: {
-                200: '#fecaca',
-                300: '#fca5a5',
-                400: '#f87171',
-                500: '#ef4444',
-                600: '#dc2626',
-                700: '#b91c1c',
-                800: '#991b1b',
-                900: '#7f1d1d',
+                200: 'rgb(var(--color-crimson-200) / <alpha-value>)',
+                300: 'rgb(var(--color-crimson-300) / <alpha-value>)',
+                400: 'rgb(var(--color-crimson-400) / <alpha-value>)',
+                500: 'rgb(var(--color-crimson-500) / <alpha-value>)',
+                600: 'rgb(var(--color-crimson-600) / <alpha-value>)',
+                700: 'rgb(var(--color-crimson-700) / <alpha-value>)',
+                800: 'rgb(var(--color-crimson-800) / <alpha-value>)',
+                900: 'rgb(var(--color-crimson-900) / <alpha-value>)',
               },
               ember: {
-                300: '#fdba74',
-                400: '#fb923c',
-                500: '#f97316',
-                600: '#ea580c',
-                700: '#c2410c',
-                800: '#9a3412',
-                900: '#7c2d12',
+                300: 'rgb(var(--color-ember-300) / <alpha-value>)',
+                400: 'rgb(var(--color-ember-400) / <alpha-value>)',
+                500: 'rgb(var(--color-ember-500) / <alpha-value>)',
+                600: 'rgb(var(--color-ember-600) / <alpha-value>)',
+                700: 'rgb(var(--color-ember-700) / <alpha-value>)',
+                800: 'rgb(var(--color-ember-800) / <alpha-value>)',
+                900: 'rgb(var(--color-ember-900) / <alpha-value>)',
               }
             },
             keyframes: {
@@ -56,8 +88,8 @@
                 '100%': { transform: 'translateY(0) scale(1)', opacity: '1' },
               },
               'pulse-glow': {
-                '0%, 100%': { boxShadow: '0 0 12px 2px rgba(220, 38, 38, 0.4)' }, /* crimson-600 */
-                '50%': { boxShadow: '0 0 20px 5px rgba(220, 38, 38, 0.2)' },
+                '0%, 100%': { boxShadow: '0 0 12px 2px rgb(var(--color-crimson-600) / 0.4)' },
+                '50%': { boxShadow: '0 0 20px 5px rgb(var(--color-crimson-600) / 0.2)' },
               },
             },
             animation: {
@@ -73,8 +105,8 @@
         overflow: hidden; /* Prevent page-level scrollbars */
       }
       ::selection {
-        background-color: #b91c1c; /* crimson-700 */
-        color: #F1F2F5; /* slate-100 */
+        background-color: rgb(var(--color-crimson-700));
+        color: rgb(var(--color-slate-100));
       }
       /* Custom scrollbar to match gaming theme */
       .custom-scrollbar::-webkit-scrollbar {
@@ -82,21 +114,21 @@
         height: 8px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
-        background: #0A0B0F; /* slate-900 */
+        background: rgb(var(--color-slate-900));
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background-color: #2C2F3D; /* slate-700 */
+        background-color: rgb(var(--color-slate-700));
         border-radius: 4px;
-        border: 2px solid #0A0B0F;
+        border: 2px solid rgb(var(--color-slate-900));
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: #484C5E; /* slate-600 */
+        background-color: rgb(var(--color-slate-600));
       }
 
       /* Card glow effect */
       .card-glow {
         position: relative;
-        border: 1px solid #181A23;
+        border: 1px solid rgb(var(--color-slate-800));
       }
       .card-glow:before {
         content: '';
@@ -104,7 +136,7 @@
         inset: 0;
         border-radius: inherit;
         padding: 1px; /* border width */
-        background: radial-gradient(300px at var(--x) var(--y), rgba(220, 38, 38, 0.3), transparent 80%);
+        background: radial-gradient(300px at var(--x) var(--y), rgb(var(--color-crimson-600) / 0.3), transparent 80%);
         -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         -webkit-mask-composite: xor;
         mask-composite: exclude;
@@ -130,7 +162,7 @@
         height: 0;
         border-top: 8px solid transparent;
         border-bottom: 8px solid transparent;
-        border-right: 8px solid #181A23; /* slate-800 */
+        border-right: 8px solid rgb(var(--color-slate-800));
       }
 
       .chat-bubble-right::after {
@@ -142,7 +174,7 @@
         height: 0;
         border-top: 8px solid transparent;
         border-bottom: 8px solid transparent;
-        border-left: 8px solid #2C2F3D; /* slate-700 */
+        border-left: 8px solid rgb(var(--color-slate-700));
       }
       
     </style>

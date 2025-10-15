@@ -150,6 +150,127 @@ function getOrBuildWorldIndex(world: World) {
   return index;
 }
 
+// --- RAG & Suggestion Helpers (Hoisted for reuse) ---
+const findMatchesInText = (
+  text: string,
+  worldIndex: ReturnType<typeof getOrBuildWorldIndex>,
+) => {
+  const localMatches = new Map<
+    string,
+    { entry: WorldEntry; count: number; reasons: Set<string> }
+  >();
+  const addLocalMatch = (entry: WorldEntry, reason: string) => {
+    if (!localMatches.has(entry.id))
+      localMatches.set(entry.id, { entry, count: 0, reasons: new Set() });
+    const match = localMatches.get(entry.id)!;
+    match.count++;
+    match.reasons.add(reason);
+  };
+
+  if (!text) return localMatches;
+  const lowerText = text.toLowerCase();
+
+  // Regex matches
+  worldIndex.regexKeywords.forEach(
+    ({ regex, entries }: { regex: RegExp; entries: WorldEntry[] }) => {
+      const matches = lowerText.match(regex);
+      if (matches) {
+        entries.forEach((entry) => {
+          for (let i = 0; i < matches.length; i++)
+            addLocalMatch(entry, `Regex: "${regex.source.replace(/\\b/g, '')}"`);
+        });
+      }
+    },
+  );
+
+  // Token-based matches (exact, stemmed)
+  const words = lowerText.match(/\b[\w'-]+\b/g) || [];
+  for (const word of new Set(words)) {
+    if (worldIndex.plainKeywordMap.has(word)) {
+      worldIndex.plainKeywordMap
+        .get(word)!
+        .forEach((entry: WorldEntry) =>
+          addLocalMatch(entry, `Exact: "${word}"`),
+        );
+    }
+    const stemmedWord = worldIndex.stem(word);
+    if (worldIndex.stemmedKeywordMap.has(stemmedWord)) {
+      worldIndex.stemmedKeywordMap.get(stemmedWord)!.forEach((entry: WorldEntry) => {
+        const plainKeys = (entry.keys || []).map((k) => k.toLowerCase().trim());
+        if (!plainKeys.includes(word))
+          addLocalMatch(entry, `Stem: "${word}" -> "${stemmedWord}"`);
+      });
+    }
+  }
+  return localMatches;
+};
+
+
+export function findRelevantEntries({
+  messages,
+  world,
+}: {
+  messages: Message[];
+  world: World;
+}): WorldEntry[] {
+  const MAX_SUGGESTIONS = 5;
+  const allEnabledEntries = world.entries.filter((e) => e.enabled);
+  if (allEnabledEntries.length === 0) return [];
+
+  const worldIndex = getOrBuildWorldIndex(world);
+  const { entryIdToEntryMap } = worldIndex;
+
+  const candidateScores = new Map<string, { score: number; reasons: Set<string> }>();
+  const addScore = (entry: WorldEntry, score: number, reason: string) => {
+    if (!candidateScores.has(entry.id))
+      candidateScores.set(entry.id, { score: 0, reasons: new Set() });
+    const current = candidateScores.get(entry.id)!;
+    current.score += score;
+    current.reasons.add(reason);
+  };
+  
+  const searchContext = (text: string, baseScore: number, type: string) => {
+    const matches = findMatchesInText(text, worldIndex);
+    for (const matchData of matches.values()) {
+      const frequencyBonus = Math.pow(matchData.count, 1.2);
+      const finalScore = baseScore * frequencyBonus;
+      const reasonSummary = Array.from(matchData.reasons).slice(0, 2).join(', ');
+      addScore(
+        matchData.entry,
+        finalScore,
+        `${type}: ${reasonSummary} (x${matchData.count})`,
+      );
+    }
+  };
+
+  messages.forEach((message, i) => {
+    const recency = messages.length - 1 - i;
+    const recencyScore = Math.max(2, 12 - recency * 2);
+    searchContext(message.content, recencyScore, `Message (t-${recency})`);
+  });
+
+  if (candidateScores.size === 0) return [];
+
+  const lastMessageContent = messages[messages.length - 1]?.content.toLowerCase() || '';
+
+  const rankedCandidates = Array.from(candidateScores.entries())
+    .map(([id, data]) => ({
+      entry: entryIdToEntryMap.get(id)!,
+      ...data,
+    }))
+    .filter(({ entry }) => !entry.isAlwaysActive)
+    .filter(({ entry }) => {
+        // Don't suggest entries that were literally just named
+        const name = entry.name?.toLowerCase();
+        return name ? !lastMessageContent.includes(name) : true;
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_SUGGESTIONS);
+
+  return rankedCandidates.map((c) => c.entry);
+}
+
+
 interface CompletionParams {
   provider: LLMProvider;
   apiKey: string;
@@ -191,6 +312,127 @@ interface SummarizeParams {
   messages: Message[];
   previousSummary?: string;
 }
+
+export interface InconsistencyReport {
+  explanation: string;
+  conflictingEntryIds: string[];
+}
+
+interface ConsistencyCheckParams {
+  provider: LLMProvider;
+  apiKey: string;
+  model: string;
+  world: World;
+}
+
+
+export async function checkForInconsistencies({
+  provider,
+  apiKey,
+  model,
+  world,
+}: ConsistencyCheckParams): Promise<InconsistencyReport[]> {
+    const systemPrompt = `You are a meticulous continuity editor for a fictional world. Your task is to analyze a set of lore entries and identify any direct contradictions or significant logical inconsistencies.
+
+CRITICAL INSTRUCTIONS:
+1.  Read all the provided lore entries carefully. Each entry has a unique ID.
+2.  Identify pairs or groups of entries that contain conflicting information. Focus on direct contradictions (e.g., "The king is alive" vs. "The king is dead"; "Magic is impossible" vs. "She is a wizard").
+3.  For each contradiction you find, you MUST provide a concise explanation of the conflict and the exact IDs of the entries involved.
+4.  If there are no contradictions, return an empty array.
+5.  Your response MUST be a valid JSON array matching the provided schema. Do not include any text outside of the JSON structure.`;
+    
+    const worldContent = world.entries
+      .filter(e => e.enabled && e.content)
+      .map(entry => `--- Entry ID: ${entry.id}, Name: ${entry.name || 'Unnamed'} ---\n${entry.content}`)
+      .join('\n\n');
+      
+    if (!worldContent) {
+        return []; // No content to check
+    }
+
+    const userPrompt = `Here are the lore entries for the world of "${world.name}". Please analyze them for contradictions.\n\n${worldContent}`;
+
+    const requestData = { provider, model, worldName: world.name };
+    logger.apiRequest('Checking for world inconsistencies', requestData);
+
+    try {
+        if (provider === LLMProvider.GEMINI) {
+            const response = await geminiAI.models.generateContent({
+                model: model,
+                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                config: {
+                    systemInstruction: systemPrompt,
+                    temperature: 0.2, // Lower temperature for more analytical task
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                explanation: {
+                                    type: Type.STRING,
+                                    description: "A clear and concise explanation of the contradiction."
+                                },
+                                conflictingEntryIds: {
+                                    type: Type.ARRAY,
+                                    description: "An array of the string IDs of the entries that conflict with each other.",
+                                    items: { type: Type.STRING }
+                                }
+                            },
+                            required: ["explanation", "conflictingEntryIds"],
+                        }
+                    },
+                }
+            });
+
+            const jsonStr = response.text.trim();
+            const report = JSON.parse(jsonStr) as InconsistencyReport[];
+            logger.apiResponse('Inconsistency check successful', { response: report });
+            return report;
+        } else {
+             const endpoint = API_ENDPOINTS[provider];
+            if (!endpoint) throw new Error(`API endpoint for ${provider} is not configured.`);
+            
+            const openAIPrompt = `${systemPrompt}\n\n${userPrompt}`;
+            const body = {
+                model,
+                messages: [
+                    { role: "system", content: "You are a helpful assistant that only responds in JSON." },
+                    { role: "user", content: openAIPrompt }
+                ],
+                temperature: 0.2,
+                response_format: { type: "json_object" },
+            };
+            
+            // Note: The schema for OpenAI is a bit different. We ask for an object with a key.
+            // A better implementation would adjust the prompt to ask for `{"contradictions": [...]}`
+            // For now, we assume it might return the array directly in a 'content' field.
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) throw new Error(`API request failed with status ${response.status}: ${await response.text()}`);
+
+            const data = await response.json();
+            const content = data.choices[0]?.message?.content;
+            if (!content) throw new Error('Invalid response format from API.');
+
+            // Attempt to parse what might be inside the content
+            const parsed = JSON.parse(content);
+            const report = (parsed.contradictions || parsed) as InconsistencyReport[];
+
+            logger.apiResponse('Inconsistency check successful', { response: report });
+            return Array.isArray(report) ? report : [];
+        }
+    } catch (error) {
+        logger.error('World inconsistency check failed', { error, requestData });
+        throw error;
+    }
+}
+
 
 export async function summarizeMessages({
   provider,
@@ -653,68 +895,6 @@ export async function* getChatCompletionStream(
       const worldIndex = getOrBuildWorldIndex(world);
       const { entryIdToEntryMap } = worldIndex;
 
-      // Helper to find all types of keyword matches in a text
-      const findMatchesInText = (text: string) => {
-        const localMatches = new Map<
-          string,
-          { entry: WorldEntry; count: number; reasons: Set<string> }
-        >();
-        const addLocalMatch = (entry: WorldEntry, reason: string) => {
-          if (!localMatches.has(entry.id))
-            localMatches.set(entry.id, { entry, count: 0, reasons: new Set() });
-          const match = localMatches.get(entry.id)!;
-          match.count++;
-          match.reasons.add(reason);
-        };
-
-        if (!text) return localMatches;
-        const lowerText = text.toLowerCase();
-
-        // Regex matches
-        worldIndex.regexKeywords.forEach(
-          ({ regex, entries }: { regex: RegExp; entries: WorldEntry[] }) => {
-            const matches = lowerText.match(regex);
-            if (matches) {
-              entries.forEach((entry) => {
-                for (let i = 0; i < matches.length; i++)
-                  addLocalMatch(
-                    entry,
-                    `Regex: "${regex.source.replace(/\\b/g, '')}"`,
-                  );
-              });
-            }
-          },
-        );
-
-        // Token-based matches (exact, stemmed)
-        const words = lowerText.match(/\b[\w'-]+\b/g) || [];
-        for (const word of new Set(words)) {
-          if (worldIndex.plainKeywordMap.has(word)) {
-            worldIndex.plainKeywordMap
-              .get(word)!
-              .forEach((entry: WorldEntry) =>
-                addLocalMatch(entry, `Exact: "${word}"`),
-              );
-          }
-          const stemmedWord = worldIndex.stem(word);
-          if (worldIndex.stemmedKeywordMap.has(stemmedWord)) {
-            worldIndex.stemmedKeywordMap
-              .get(stemmedWord)!
-              .forEach((entry: WorldEntry) => {
-                const plainKeys = (entry.keys || []).map((k) =>
-                  k.toLowerCase().trim(),
-                );
-                if (!plainKeys.includes(word))
-                  addLocalMatch(
-                    entry,
-                    `Stem: "${word}" -> "${stemmedWord}"`,
-                  );
-              });
-          }
-        }
-        return localMatches;
-      };
-
       const candidateScores = new Map<
         string,
         { score: number; reasons: Set<string> }
@@ -767,7 +947,7 @@ export async function* getChatCompletionStream(
 
       // 4. Contextual search with smart matching
       const searchContext = (text: string, baseScore: number, type: string) => {
-        const matches = findMatchesInText(text);
+        const matches = findMatchesInText(text, worldIndex);
         for (const matchData of matches.values()) {
           const frequencyBonus = Math.pow(matchData.count, 1.2);
           const finalScore = baseScore * frequencyBonus;

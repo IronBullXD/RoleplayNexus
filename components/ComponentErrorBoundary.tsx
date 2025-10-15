@@ -13,17 +13,17 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false, error: undefined };
-    this.handleRetry = this.handleRetry.bind(this);
-  }
+  state: State = {
+    hasError: false,
+    error: undefined,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
+  componentDidCatch = (error: Error, errorInfo: ErrorInfo): void => {
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
       {
@@ -36,11 +36,12 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  handleRetry() {
+  handleRetry = (): void => {
     this.setState({ hasError: false, error: undefined });
-  }
+  };
 
-  render() {
+  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
+  render = (): ReactNode => {
     if (this.state.hasError) {
       return (
         <div className="bg-red-900/50 border border-red-500/50 rounded-lg p-4 m-4 text-red-300">

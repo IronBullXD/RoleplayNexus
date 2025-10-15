@@ -12,6 +12,7 @@ import {
   Persona,
   LLMProvider,
   GroupTurnAction,
+  Theme,
 } from '../types';
 import {
   DEFAULT_CHARACTER,
@@ -38,6 +39,87 @@ type ConfirmationAction = {
   confirmVariant?: 'danger' | 'primary';
 } | null;
 
+const defaultThemes: Theme[] = [
+  {
+    id: 'cyber-noir',
+    name: 'Cyber Noir',
+    isImmutable: true,
+    config: {
+      primary: '#ef4444', // crimson-500
+      secondary: '#f97316', // ember-500
+      neutral: '#0A0B0F', // slate-900
+      text: '#F1F2F5', // slate-100
+    },
+  },
+  {
+    id: 'deep-forest',
+    name: 'Deep Forest',
+    isImmutable: true,
+    config: {
+      primary: '#22c55e', // green-500
+      secondary: '#a16207', // yellow-700
+      neutral: '#1c1917', // stone-900
+      text: '#f5f5f4', // stone-100
+    },
+  },
+  {
+    id: 'arcane-void',
+    name: 'Arcane Void',
+    isImmutable: true,
+    config: {
+      primary: '#a855f7', // purple-500
+      secondary: '#06b6d4', // cyan-500
+      neutral: '#100c14',
+      text: '#f0e8f8',
+    },
+  },
+  {
+    id: 'solar-flare',
+    name: 'Solar Flare',
+    isImmutable: true,
+    config: {
+      primary: '#facc15', // yellow-400
+      secondary: '#dc2626', // red-600
+      neutral: '#18181b', // zinc-900
+      text: '#fefce8', // yellow-50
+    },
+  },
+  {
+    id: 'oceanic-depths',
+    name: 'Oceanic Depths',
+    isImmutable: true,
+    config: {
+      primary: '#3b82f6', // blue-500
+      secondary: '#14b8a6', // teal-500
+      neutral: '#0c1424',
+      text: '#e0f2fe', // sky-100
+    },
+  },
+  {
+    id: 'rose-quartz',
+    name: 'Rose Quartz',
+    isImmutable: true,
+    config: {
+      primary: '#f472b6', // pink-400
+      secondary: '#c084fc', // purple-400
+      neutral: '#1c1917', // stone-900
+      text: '#fdf2f8', // pink-50
+    },
+  },
+  {
+    id: 'synthwave-sunset',
+    name: 'Synthwave Sunset',
+    isImmutable: true,
+    config: {
+      primary: '#ec4899', // pink-500
+      secondary: '#22d3ee', // cyan-400
+      neutral: '#190f2b',
+      text: '#f5f3ff', // violet-50
+    },
+  },
+];
+
+
 interface AppState {
   // Persisted State
   characters: Character[];
@@ -53,6 +135,8 @@ interface AppState {
     string,
     Record<string, { viewCount: number; lastViewed: number }>
   >;
+  themes: Theme[];
+  activeThemeId: string;
 
   // Non-persisted (transient) State
   currentView: View;
@@ -126,6 +210,11 @@ interface AppActions {
 
   // Global Settings
   saveSettings: (settings: Settings) => void;
+  
+  // Theme Management
+  saveTheme: (theme: Theme) => void;
+  deleteTheme: (themeId: string) => void;
+  setActiveTheme: (themeId: string) => void;
 
   // World Management
   saveWorld: (world: World) => void;
@@ -221,6 +310,8 @@ export const useAppStore = create<AppState & AppActions>()(
       activeSessionId: null,
       activeGroupSessionId: null,
       worldEntryInteractions: {},
+      themes: defaultThemes,
+      activeThemeId: 'cyber-noir',
       currentView: 'CHARACTER_SELECTION',
       isLoading: false,
       error: null,
@@ -255,8 +346,20 @@ export const useAppStore = create<AppState & AppActions>()(
               characters.push(DEFAULT_CHARACTER);
             }
           }
+          
+          // Ensure default themes are present if user has old storage
+          const storedThemes = state.themes || [];
+          const defaultThemeIds = new Set(defaultThemes.map(t => t.id));
+          const userThemes = storedThemes.filter(t => !t.isImmutable);
+          const missingDefaultThemes = defaultThemes.filter(t => !storedThemes.some(st => st.id === t.id));
 
-          return { isInitialized: true, characters };
+          return { 
+              isInitialized: true, 
+              characters,
+              themes: [...userThemes, ...defaultThemes],
+              // If the active theme was a default one that got updated, keep it. If not, reset.
+              activeThemeId: defaultThemeIds.has(state.activeThemeId) ? state.activeThemeId : 'cyber-noir',
+          };
         });
       },
 
@@ -404,6 +507,37 @@ export const useAppStore = create<AppState & AppActions>()(
 
       // --- Settings & Worlds ---
       saveSettings: (newSettings) => set({ settings: newSettings }),
+      
+      // --- Theme management ---
+      saveTheme: (theme) => {
+          set(state => ({
+              themes: state.themes.find(t => t.id === theme.id)
+                  ? state.themes.map(t => t.id === theme.id ? theme : t)
+                  : [...state.themes, theme]
+          }));
+      },
+
+      deleteTheme: (themeId) => {
+          const { themes, activeThemeId, requestConfirmation } = get();
+          const theme = themes.find(t => t.id === themeId);
+          if (!theme || theme.isImmutable) return;
+
+          requestConfirmation(
+              () => {
+                  set(state => {
+                      const newThemes = state.themes.filter(t => t.id !== themeId);
+                      const newActiveThemeId = state.activeThemeId === themeId ? 'cyber-noir' : state.activeThemeId;
+                      return { themes: newThemes, activeThemeId: newActiveThemeId };
+                  });
+              },
+              'Delete Theme',
+              `Are you sure you want to delete the theme "${theme.name}"?`,
+              'Delete',
+              'danger'
+          );
+      },
+
+      setActiveTheme: (themeId) => set({ activeThemeId: themeId }),
 
       saveWorld: (world) =>
         set((state) => ({
@@ -1270,6 +1404,8 @@ export const useAppStore = create<AppState & AppActions>()(
         activeSessionId: state.activeSessionId,
         activeGroupSessionId: state.activeGroupSessionId,
         worldEntryInteractions: state.worldEntryInteractions,
+        themes: state.themes,
+        activeThemeId: state.activeThemeId,
       }),
     },
   ),

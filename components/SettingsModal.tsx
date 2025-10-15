@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, LLMProvider } from '../types';
+import { Settings, LLMProvider, Theme, ThemeConfig } from '../types';
 import { Icon } from './Icon';
 import { useAppStore } from '../store/useAppStore';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import ThemeEditorModal from './ThemeEditorModal';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
-type SettingsSection = 'general' | 'providers' | 'prompts';
+type SettingsSection = 'general' | 'appearance' | 'providers' | 'prompts';
 
 function SectionButton({
   icon,
@@ -152,6 +153,73 @@ function GeneralSection({
     </SettingsSectionPanel>
   );
 }
+
+function AppearanceSection() {
+    const { themes, activeThemeId, setActiveTheme, deleteTheme } = useAppStore();
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+
+    const handleEdit = (theme: Theme) => {
+        setEditingTheme(theme);
+        setIsEditorOpen(true);
+    };
+
+    const handleCreate = () => {
+        setEditingTheme(null);
+        setIsEditorOpen(true);
+    };
+
+    return (
+        <>
+            <SettingsSectionPanel
+                title="Appearance"
+                description="Customize the look and feel of the application with themes."
+            >
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {themes.map(theme => (
+                        <div key={theme.id}
+                            className={`relative p-4 rounded-lg border-2 text-left transition-all duration-200 cursor-pointer group
+                            ${activeThemeId === theme.id ? 'border-crimson-500 bg-crimson-900/20' : 'border-slate-700 hover:border-slate-500 bg-slate-800/50'}`}
+                            onClick={() => setActiveTheme(theme.id)}
+                        >
+                            {activeThemeId === theme.id && (
+                                <div className="absolute top-3 right-3 w-5 h-5 bg-crimson-500 rounded-full flex items-center justify-center border-2 border-slate-900">
+                                    <Icon name="checkmark" className="w-3 h-3 text-white" />
+                                </div>
+                            )}
+                            <h4 className="font-bold text-slate-100">{theme.name}</h4>
+                            <div className="flex items-center gap-2 mt-3">
+                                <div className="w-6 h-6 rounded-full border-2 border-slate-600" style={{ backgroundColor: theme.config.primary }}></div>
+                                <div className="w-6 h-6 rounded-full border-2 border-slate-600" style={{ backgroundColor: theme.config.secondary }}></div>
+                                <div className="w-6 h-6 rounded-full border-2 border-slate-600" style={{ backgroundColor: theme.config.neutral }}></div>
+                                <div className="w-6 h-6 rounded-full border-2 border-slate-600" style={{ backgroundColor: theme.config.text }}></div>
+                            </div>
+                            {!theme.isImmutable && (
+                                <div className="absolute bottom-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); handleEdit(theme); }} className="p-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-md text-slate-300 hover:text-white"><Icon name="edit" className="w-4 h-4" /></button>
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); deleteTheme(theme.id); }} className="p-1.5 bg-slate-700/50 hover:bg-slate-600 rounded-md text-slate-300 hover:text-ember-400"><Icon name="delete" className="w-4 h-4" /></button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    <button type="button" onClick={handleCreate} className="p-4 rounded-lg border-2 border-dashed border-slate-700 hover:border-crimson-500 hover:bg-slate-800/50 transition-colors flex flex-col items-center justify-center text-slate-500 hover:text-crimson-400">
+                        <Icon name="add" className="w-8 h-8"/>
+                        <span className="mt-2 text-sm font-semibold">Create New Theme</span>
+                    </button>
+                </div>
+            </SettingsSectionPanel>
+            <AnimatePresence>
+                {isEditorOpen && (
+                    <ThemeEditorModal 
+                        theme={editingTheme}
+                        onClose={() => setIsEditorOpen(false)}
+                    />
+                )}
+            </AnimatePresence>
+        </>
+    );
+}
+
 
 interface ProviderConfigProps {
   provider: LLMProvider;
@@ -350,6 +418,8 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     switch (activeSection) {
       case 'general':
         return <GeneralSection settings={settings} setSettings={setSettings} />;
+      case 'appearance':
+        return <AppearanceSection />;
       case 'providers':
         return (
           <ProvidersSection settings={settings} setSettings={setSettings} />
@@ -401,6 +471,12 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                   label="General"
                   isActive={activeSection === 'general'}
                   onClick={() => setActiveSection('general')}
+                />
+                <SectionButton
+                  icon="sparkles"
+                  label="Appearance"
+                  isActive={activeSection === 'appearance'}
+                  onClick={() => setActiveSection('appearance')}
                 />
                 <SectionButton
                   icon="send"

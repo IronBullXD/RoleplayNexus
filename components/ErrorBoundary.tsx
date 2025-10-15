@@ -12,20 +12,16 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-    };
-    this.handleResetAndReload = this.handleResetAndReload.bind(this);
-  }
+  state: State = {
+    hasError: false,
+    error: undefined,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error('Uncaught UI Error', {
       error: {
         message: error.message,
@@ -36,7 +32,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  handleResetAndReload() {
+  handleResetAndReload = (): void => {
     logger.log('Attempting to clear storage and reload from error boundary.');
     try {
       window.localStorage.clear();
@@ -44,9 +40,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       logger.error('Failed to clear local storage', e);
     }
     window.location.reload();
-  }
+  };
 
-  render() {
+  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
+  render = (): ReactNode => {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-4">

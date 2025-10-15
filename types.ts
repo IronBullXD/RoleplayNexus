@@ -58,7 +58,7 @@ export interface WorldEntry {
 }
 
 export interface World {
-  id: string;
+  id:string;
   name: string;
   avatar?: string;
   description: string;
@@ -119,10 +119,24 @@ export interface GroupTurnAction {
 }
 
 export interface ValidationIssue {
-  type: 'DuplicateKeyword' | 'UnusedEntry' | 'MissingName' | 'ShortContent' | 'OverlappingKeyword';
-  severity: 'warning' | 'info';
+  type: 'DuplicateKeyword' | 'UnusedEntry' | 'MissingName' | 'ShortContent' | 'OverlappingKeyword' | 'Contradiction';
+  severity: 'warning' | 'info' | 'error';
   message: string;
   entryIds: string[];
   // e.g., the duplicate keyword itself, or the overlapping keywords
   relatedData?: { keyword?: string, otherKeyword?: string, otherEntryNames?: string[] };
+}
+
+export interface ThemeConfig {
+  primary: string; // hex color for the main accent (e.g., crimson)
+  secondary: string; // hex color for the secondary accent (e.g., ember)
+  neutral: string; // hex color for the base dark background (e.g., a dark slate)
+  text: string; // hex color for primary text
+}
+
+export interface Theme {
+  id: string;
+  name: string;
+  isImmutable?: boolean;
+  config: ThemeConfig;
 }
