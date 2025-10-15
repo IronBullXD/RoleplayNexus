@@ -82,6 +82,34 @@ const FormField: React.FC<{
   );
 };
 
+const ProviderCard: React.FC<{
+  provider: LLMProvider;
+  description: string;
+  isSelected: boolean;
+  onSelect: () => void;
+}> = ({ provider, description, isSelected, onSelect }) => {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`relative p-4 rounded-lg border-2 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:ring-crimson-500
+        ${
+          isSelected
+            ? 'bg-crimson-600/10 border-crimson-500 shadow-lg shadow-crimson-900/50'
+            : 'bg-slate-800/50 border-slate-700 hover:border-crimson-500/70 hover:-translate-y-1'
+        }`}
+    >
+      {isSelected && (
+        <div className="absolute top-3 right-3 w-5 h-5 bg-crimson-500 rounded-full flex items-center justify-center border-2 border-slate-900">
+          <Icon name="checkmark" className="w-3 h-3 text-white" />
+        </div>
+      )}
+      <h4 className="text-md font-bold text-slate-100">{provider}</h4>
+      <p className="mt-2 text-xs text-slate-400">{description}</p>
+    </button>
+  );
+};
+
 function GeneralSection({
   settings,
   setSettings,
@@ -89,6 +117,18 @@ function GeneralSection({
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
 }) {
+  const providersInfo = {
+    [LLMProvider.GEMINI]: {
+      description: "Google's powerful and versatile family of models.",
+    },
+    [LLMProvider.OPENROUTER]: {
+      description: 'Access a wide variety of models through a single API.',
+    },
+    [LLMProvider.DEEPSEEK]: {
+      description: 'A specialized model provider focused on code and chat.',
+    },
+  };
+
   return (
     <SettingsSectionPanel
       title="General"
@@ -96,26 +136,18 @@ function GeneralSection({
     >
       <FormField
         label="Default LLM Provider"
-        htmlFor="provider-toggle"
+        htmlFor="provider-grid"
         description="Select which provider to use for all chat completions."
       >
-        <div
-          id="provider-toggle"
-          className="grid grid-cols-3 gap-2 p-1 bg-slate-800 rounded-lg"
-        >
+        <div id="provider-grid" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Object.values(LLMProvider).map((p) => (
-            <button
-              type="button"
+            <ProviderCard
               key={p}
-              onClick={() => setSettings((prev) => ({ ...prev, provider: p }))}
-              className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-crimson-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-                settings.provider === p
-                  ? 'bg-crimson-600 text-white shadow'
-                  : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              {p}
-            </button>
+              provider={p}
+              description={providersInfo[p].description}
+              isSelected={settings.provider === p}
+              onSelect={() => setSettings((prev) => ({ ...prev, provider: p }))}
+            />
           ))}
         </div>
       </FormField>
