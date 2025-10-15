@@ -40,7 +40,6 @@ function SectionButton({
   );
 }
 
-// FIX: Changed component from a function declaration to a const with React.FC to resolve typing issues with the `children` prop.
 const SettingsSectionPanel: React.FC<{
   title: string;
   description: string;
@@ -59,7 +58,6 @@ const SettingsSectionPanel: React.FC<{
   );
 };
 
-// FIX: Changed component from a function declaration to a const with React.FC to resolve typing issues with the `children` prop.
 const FormField: React.FC<{
   label: string;
   description?: string;

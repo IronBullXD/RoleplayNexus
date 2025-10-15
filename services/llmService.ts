@@ -264,7 +264,8 @@ export async function generateCharacterProfile({
   model,
   concept,
 }: GenerateCharacterParams): Promise<GeneratedCharacterProfile> {
-  const systemPrompt = `You are a creative assistant that designs compelling characters for a roleplaying game. Based on the user's concept, generate a complete character profile. The profile must include a unique name, a short greeting message, a brief description for a character list, and a detailed persona for the AI to use.
+  const systemPrompt = `
+You are a creative assistant that designs compelling characters for a roleplaying game. Based on the user's concept, generate a complete character profile. The profile must include a unique name, a short greeting message, a brief description for a character list, and a detailed persona for the AI to use.
 
 CRITICAL INSTRUCTIONS FOR THE 'greeting' FIELD:
 The greeting message MUST adhere to the following markdown-style formatting rules:
@@ -291,7 +292,8 @@ Background:
 Motivations:
 [What drives the character.]
 
-Respond ONLY with a valid JSON object matching the provided schema.`;
+Respond ONLY with a valid JSON object matching the provided schema.
+  `.trim();
 
   const userPrompt = `Concept: "${concept}"`;
 

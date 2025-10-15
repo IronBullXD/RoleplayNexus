@@ -15,6 +15,12 @@ import ChatSettingsPopover from './ChatSettingsPopover';
 import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
 import { usePaginatedMessages } from '../hooks/usePaginatedMessages';
+import {
+  DateSeparator,
+  SystemMessage,
+  ActionButton,
+  TypingIndicator,
+} from './ChatCommon';
 
 interface ChatWindowProps {
   onNavigateToHistory: () => void;
@@ -30,30 +36,6 @@ const isSameDay = (ts1?: number, ts2?: number) => {
     d1.getDate() === d2.getDate()
   );
 };
-
-function DateSeparator({ timestamp }: { timestamp: number }) {
-  const date = new Date(timestamp);
-  const formattedDate = new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'full',
-  }).format(date);
-  return (
-    <div className="relative my-4">
-      <hr className="border-slate-700/50" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="bg-slate-900 px-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-          {formattedDate}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-const SystemMessage: React.FC<{ message: Message }> = ({ message }) => (
-  <div className="flex justify-center items-center gap-3 my-4 text-xs text-slate-500 font-semibold animate-fade-in">
-    <Icon name="brain" className="w-4 h-4" />
-    <p>{message.content}</p>
-  </div>
-);
 
 interface ChatMessageProps {
   message: Message;
@@ -71,34 +53,6 @@ interface ChatMessageProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   world: World | null;
-}
-
-function ActionButton({
-  icon,
-  label,
-  onClick,
-  disabled,
-  className = '',
-}: {
-  icon: string;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <Tooltip content={label} position="top">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className={`p-1.5 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-md transition-colors ${className}`}
-        aria-label={label}
-      >
-        <Icon name={icon} className="w-4 h-4" />
-      </button>
-    </Tooltip>
-  );
 }
 
 function ChatMessage({
@@ -284,19 +238,6 @@ function ChatMessage({
     </div>
   );
 }
-
-const TypingIndicator: React.FC = () => (
-  <div className="flex items-start gap-4 my-5 animate-fade-in">
-    <div className="w-10 h-10 shrink-0"></div>
-    <div className="p-4 rounded-xl bg-slate-800">
-      <div className="flex items-center space-x-1.5">
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
-      </div>
-    </div>
-  </div>
-);
 
 function formatRelativeTime(timestamp: number): string {
   const now = new Date();

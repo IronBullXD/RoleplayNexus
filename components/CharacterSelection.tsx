@@ -53,7 +53,6 @@ type RecentSession = {
   timestamp: number;
 };
 
-// FIX: Converted RecentChatCard to a React.FC with a defined props interface to resolve the 'key' prop error.
 interface RecentChatCardProps {
   session: RecentSession;
   onClick: () => void;

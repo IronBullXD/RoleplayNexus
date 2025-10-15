@@ -64,31 +64,39 @@ function App() {
   ]);
 
   // --- Modal State Management ---
-  const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
-  const [isPersonaEditorOpen, setIsPersonaEditorOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isWorldsModalOpen, setIsWorldsModalOpen] = useState(false);
-  const [isDebugWindowOpen, setIsDebugWindowOpen] = useState(false);
+  const [modals, setModals] = useState({
+    characterEditor: false,
+    personaEditor: false,
+    settings: false,
+    history: false,
+    worlds: false,
+    debug: false,
+  });
+
+  const openModal = (modal: keyof typeof modals) =>
+    setModals((prev) => ({ ...prev, [modal]: true }));
+  const closeModal = (modal: keyof typeof modals) =>
+    setModals((prev) => ({ ...prev, [modal]: false }));
+
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(
     null,
   );
 
   const handleNewCharacter = () => {
     setEditingCharacter(null);
-    setIsCharacterEditorOpen(true);
+    openModal('characterEditor');
   };
 
   const handleEditCharacter = (character: Character) => {
     setEditingCharacter(character);
-    setIsCharacterEditorOpen(true);
+    openModal('characterEditor');
   };
 
   const renderView = () => {
     switch (currentView) {
       case 'CHAT':
         if (!activeCharacterId || !activeSessionId) return null;
-        return <ChatWindow onNavigateToHistory={() => setIsHistoryOpen(true)} />;
+        return <ChatWindow onNavigateToHistory={() => openModal('history')} />;
       case 'GROUP_CHAT_SETUP':
         return (
           <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />
@@ -96,7 +104,7 @@ function App() {
       case 'GROUP_CHAT':
         if (!activeGroupSessionId) return null;
         return (
-          <GroupChatWindow onNavigateToHistory={() => setIsHistoryOpen(true)} />
+          <GroupChatWindow onNavigateToHistory={() => openModal('history')} />
         );
       case 'CHARACTER_SELECTION':
       default:
@@ -104,12 +112,12 @@ function App() {
           <CharacterSelection
             onNewCharacter={handleNewCharacter}
             onEditCharacter={handleEditCharacter}
-            onNavigateToSettings={() => setIsSettingsOpen(true)}
-            onNavigateToHistory={() => setIsHistoryOpen(true)}
+            onNavigateToSettings={() => openModal('settings')}
+            onNavigateToHistory={() => openModal('history')}
             onNavigateToGroupSetup={() => setCurrentView('GROUP_CHAT_SETUP')}
-            onNavigateToWorlds={() => setIsWorldsModalOpen(true)}
-            onNavigateToPersona={() => setIsPersonaEditorOpen(true)}
-            onNavigateToDebug={() => setIsDebugWindowOpen(true)}
+            onNavigateToWorlds={() => openModal('worlds')}
+            onNavigateToPersona={() => openModal('personaEditor')}
+            onNavigateToDebug={() => openModal('debug')}
           />
         );
     }
@@ -122,29 +130,24 @@ function App() {
 
       {/* --- Modals --- */}
       <AnimatePresence>
-        {isCharacterEditorOpen && (
+        {modals.characterEditor && (
           <CharacterEditor
             character={editingCharacter}
-            onClose={() => setIsCharacterEditorOpen(false)}
+            onClose={() => closeModal('characterEditor')}
           />
         )}
-        {isPersonaEditorOpen && (
+        {modals.personaEditor && (
           <PersonaEditor
             persona={userPersona}
-            onClose={() => setIsPersonaEditorOpen(false)}
+            onClose={() => closeModal('personaEditor')}
           />
         )}
-        {isSettingsOpen && (
-          <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+        {modals.settings && (
+          <SettingsModal onClose={() => closeModal('settings')} />
         )}
-        {isHistoryOpen && (
-          <HistoryModal onClose={() => setIsHistoryOpen(false)} />
-        )}
-        {isWorldsModalOpen && (
-          <WorldsPage
-            worlds={worlds}
-            onClose={() => setIsWorldsModalOpen(false)}
-          />
+        {modals.history && <HistoryModal onClose={() => closeModal('history')} />}
+        {modals.worlds && (
+          <WorldsPage worlds={worlds} onClose={() => closeModal('worlds')} />
         )}
         {isConfirmationModalOpen && (
           <ConfirmationModal
@@ -156,9 +159,9 @@ function App() {
             confirmButtonVariant={confirmationAction?.confirmVariant}
           />
         )}
-        {isDebugWindowOpen && (
+        {modals.debug && (
           <DebugWindow
-            onClose={() => setIsDebugWindowOpen(false)}
+            onClose={() => closeModal('debug')}
             appState={getAppState()}
           />
         )}

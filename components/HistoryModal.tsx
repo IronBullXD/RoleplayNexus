@@ -19,7 +19,6 @@ interface HistoryItemProps {
   onDelete: () => void;
 }
 
-// FIX: Converted HistoryItem to a React.FC to resolve errors with the 'key' prop in lists.
 const HistoryItem: React.FC<HistoryItemProps> = ({
   avatars,
   title,
