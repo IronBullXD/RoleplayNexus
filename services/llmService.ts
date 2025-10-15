@@ -189,6 +189,7 @@ interface SummarizeParams {
   apiKey: string;
   model: string;
   messages: Message[];
+  previousSummary?: string;
 }
 
 export async function summarizeMessages({
@@ -196,13 +197,33 @@ export async function summarizeMessages({
   apiKey,
   model,
   messages,
+  previousSummary,
 }: SummarizeParams): Promise<string> {
-  const systemPrompt = `You are an expert at summarizing conversations. Condense the following chat log into a concise summary, capturing all key events, character developments, important decisions, and crucial facts. The summary should be written in the third person.`;
+  const systemPrompt = `You are an expert at creating and updating conversation summaries. Your task is to produce a new, consolidated summary.
+
+Instructions:
+1.  Read the "PREVIOUS SUMMARY" (if provided). This is the condensed history of events so far.
+2.  Read the "NEW CONVERSATION LOG". These are the most recent messages that need to be integrated.
+3.  Combine both sources into a single, coherent, and updated summary.
+4.  The new summary MUST be written in the third person.
+5.  It MUST capture all key events, character developments, important decisions, new lore, and crucial facts.
+6.  CRITICAL: Do NOT repeat information. If the new log clarifies or supersedes something from the previous summary, update it. Keep the summary as concise as possible while retaining vital information.`;
 
   const conversationText = messages
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n');
-  const userPrompt = `Please summarize this conversation:\n\n${conversationText}`;
+
+  const userPromptParts = [];
+  if (previousSummary) {
+    userPromptParts.push('### PREVIOUS SUMMARY ###');
+    userPromptParts.push(previousSummary);
+  }
+  userPromptParts.push('### NEW CONVERSATION LOG ###');
+  userPromptParts.push(conversationText);
+  userPromptParts.push(
+    '\nBased on the instructions, provide the new, consolidated summary.',
+  );
+  const userPrompt = userPromptParts.join('\n\n');
 
   const requestData = { provider, model };
   logger.apiRequest('Summarizing conversation', requestData);

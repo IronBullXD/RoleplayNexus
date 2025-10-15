@@ -15,6 +15,7 @@ import DebugWindow from './components/DebugWindow';
 import { logger } from './services/logger';
 import { AnimatePresence } from 'framer-motion';
 import BackgroundAnimation from './components/BackgroundAnimation';
+import ComponentErrorBoundary from './components/ComponentErrorBoundary';
 
 function App() {
   const {
@@ -126,44 +127,62 @@ function App() {
   return (
     <div className="h-screen w-full text-slate-100 font-sans overflow-hidden relative">
       <BackgroundAnimation />
-      {renderView()}
+      <ComponentErrorBoundary componentName="Main View">
+        {renderView()}
+      </ComponentErrorBoundary>
 
       {/* --- Modals --- */}
       <AnimatePresence>
         {modals.characterEditor && (
-          <CharacterEditor
-            character={editingCharacter}
-            onClose={() => closeModal('characterEditor')}
-          />
+          <ComponentErrorBoundary componentName="Character Editor Modal">
+            <CharacterEditor
+              character={editingCharacter}
+              onClose={() => closeModal('characterEditor')}
+            />
+          </ComponentErrorBoundary>
         )}
         {modals.personaEditor && (
-          <PersonaEditor
-            persona={userPersona}
-            onClose={() => closeModal('personaEditor')}
-          />
+          <ComponentErrorBoundary componentName="Persona Editor Modal">
+            <PersonaEditor
+              persona={userPersona}
+              onClose={() => closeModal('personaEditor')}
+            />
+          </ComponentErrorBoundary>
         )}
         {modals.settings && (
-          <SettingsModal onClose={() => closeModal('settings')} />
+          <ComponentErrorBoundary componentName="Settings Modal">
+            <SettingsModal onClose={() => closeModal('settings')} />
+          </ComponentErrorBoundary>
         )}
-        {modals.history && <HistoryModal onClose={() => closeModal('history')} />}
+        {modals.history && (
+          <ComponentErrorBoundary componentName="History Modal">
+            <HistoryModal onClose={() => closeModal('history')} />
+          </ComponentErrorBoundary>
+        )}
         {modals.worlds && (
-          <WorldsPage worlds={worlds} onClose={() => closeModal('worlds')} />
+          <ComponentErrorBoundary componentName="Worlds Modal">
+            <WorldsPage worlds={worlds} onClose={() => closeModal('worlds')} />
+          </ComponentErrorBoundary>
         )}
         {isConfirmationModalOpen && (
-          <ConfirmationModal
-            onClose={handleCloseConfirmation}
-            onConfirm={handleConfirm}
-            title={confirmationAction?.title || ''}
-            message={confirmationAction?.message || ''}
-            confirmButtonText={confirmationAction?.confirmText}
-            confirmButtonVariant={confirmationAction?.confirmVariant}
-          />
+          <ComponentErrorBoundary componentName="Confirmation Modal">
+            <ConfirmationModal
+              onClose={handleCloseConfirmation}
+              onConfirm={handleConfirm}
+              title={confirmationAction?.title || ''}
+              message={confirmationAction?.message || ''}
+              confirmButtonText={confirmationAction?.confirmText}
+              confirmButtonVariant={confirmationAction?.confirmVariant}
+            />
+          </ComponentErrorBoundary>
         )}
         {modals.debug && (
-          <DebugWindow
-            onClose={() => closeModal('debug')}
-            appState={getAppState()}
-          />
+          <ComponentErrorBoundary componentName="Debug Window Modal">
+            <DebugWindow
+              onClose={() => closeModal('debug')}
+              appState={getAppState()}
+            />
+          </ComponentErrorBoundary>
         )}
       </AnimatePresence>
     </div>

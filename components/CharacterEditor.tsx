@@ -149,11 +149,17 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    saveCharacter({
-      ...formData,
+    // Explicitly construct a valid Character object to satisfy the type system without casting.
+    const characterToSave: Character = {
       id: formData.id || crypto.randomUUID(),
+      name: formData.name || 'Unnamed Character',
+      avatar: formData.avatar || '',
+      greeting: formData.greeting || '',
+      description: formData.description || '',
       persona: serializePersona(structuredPersona),
-    } as Character);
+      isImmutable: formData.isImmutable,
+    };
+    saveCharacter(characterToSave);
     onClose();
   };
 

@@ -12,16 +12,13 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  // Fix: Declare state property on the class. In TypeScript class components,
-  // properties like 'state' must be declared before being assigned in the constructor.
-  state: State;
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
       hasError: false,
       error: undefined,
     };
+    this.handleResetAndReload = this.handleResetAndReload.bind(this);
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -36,54 +33,63 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       },
       componentStack: errorInfo.componentStack,
     });
-    console.error("Uncaught error:", error, errorInfo);
+    console.error('Uncaught error:', error, errorInfo);
   }
-  
-  private handleResetAndReload = () => {
-      logger.log('Attempting to clear storage and reload from error boundary.');
-      try {
-        window.localStorage.clear();
-      } catch (e) {
-        logger.error('Failed to clear local storage', e);
-      }
-      window.location.reload();
+
+  handleResetAndReload() {
+    logger.log('Attempting to clear storage and reload from error boundary.');
+    try {
+      window.localStorage.clear();
+    } catch (e) {
+      logger.error('Failed to clear local storage', e);
+    }
+    window.location.reload();
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-2xl text-center shadow-2xl shadow-red-900/50">
-                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Icon name="bug" className="w-8 h-8 text-red-400" />
-                </div>
-                <h1 className="text-2xl font-bold text-red-400">Oops! Something went wrong.</h1>
-                <p className="mt-2 text-slate-400">The application encountered a critical error and cannot continue.</p>
-                
-                <div className="mt-4 p-3 bg-slate-800/50 rounded-md text-left text-sm font-mono text-red-300 overflow-auto max-h-40">
-                    <p className="font-semibold">{this.state.error?.message}</p>
-                    <pre className="text-xs whitespace-pre-wrap mt-2 opacity-70">{this.state.error?.stack}</pre>
-                </div>
-
-                <p className="mt-6 text-sm text-slate-500">
-                    You can try reloading the page. If the problem persists, you may need to reset the application state. All error details have been logged to the debug console, which you can access from the main screen after reloading.
-                </p>
-
-                <div className="mt-6 flex justify-center gap-4">
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 text-sm font-medium text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors"
-                    >
-                        Reload Page
-                    </button>
-                    <button 
-                        onClick={this.handleResetAndReload}
-                        className="px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 hover:bg-red-600/40 rounded-lg transition-colors"
-                    >
-                        Reset and Reload
-                    </button>
-                </div>
+          <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-2xl text-center shadow-2xl shadow-red-900/50">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Icon name="bug" className="w-8 h-8 text-red-400" />
             </div>
+            <h1 className="text-2xl font-bold text-red-400">
+              Oops! Something went wrong.
+            </h1>
+            <p className="mt-2 text-slate-400">
+              The application encountered a critical error and cannot continue.
+            </p>
+
+            <div className="mt-4 p-3 bg-slate-800/50 rounded-md text-left text-sm font-mono text-red-300 overflow-auto max-h-40">
+              <p className="font-semibold">{this.state.error?.message}</p>
+              <pre className="text-xs whitespace-pre-wrap mt-2 opacity-70">
+                {this.state.error?.stack}
+              </pre>
+            </div>
+
+            <p className="mt-6 text-sm text-slate-500">
+              You can try reloading the page. If the problem persists, you may
+              need to reset the application state. All error details have been
+              logged to the debug console, which you can access from the main
+              screen after reloading.
+            </p>
+
+            <div className="mt-6 flex justify-center gap-4">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 text-sm font-medium text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors"
+              >
+                Reload Page
+              </button>
+              <button
+                onClick={this.handleResetAndReload}
+                className="px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 hover:bg-red-600/40 rounded-lg transition-colors"
+              >
+                Reset and Reload
+              </button>
+            </div>
+          </div>
         </div>
       );
     }

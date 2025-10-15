@@ -888,100 +888,205 @@ export const useAppStore = create<AppState & AppActions>()(
       handleSummarization: async (session, currentMessages) => {
         const { settings } = get();
         const contextSize = session.contextSize ?? settings.contextSize;
-        if (!(session.memoryEnabled && contextSize > 0)) return { messages: currentMessages, summary: session.memorySummary };
+        if (!(session.memoryEnabled && contextSize > 0))
+          return { messages: currentMessages, summary: session.memorySummary };
         const totalTokens = estimateTokens(JSON.stringify(currentMessages));
-        if (totalTokens < contextSize * MEMORY_TRIGGER_THRESHOLD) return { messages: currentMessages, summary: session.memorySummary };
+        if (totalTokens < contextSize * MEMORY_TRIGGER_THRESHOLD)
+          return { messages: currentMessages, summary: session.memorySummary };
         logger.log('Memory threshold reached', { totalTokens, contextSize });
-        const sliceIndex = Math.floor(currentMessages.length * MEMORY_SLICE_PERCENT);
+        const sliceIndex = Math.floor(
+          currentMessages.length * MEMORY_SLICE_PERCENT,
+        );
         const messagesToSummarize = currentMessages.slice(0, sliceIndex);
         const remainingMessages = currentMessages.slice(sliceIndex);
         try {
-            const { provider, apiKeys, models } = settings;
-            const model = models?.[provider] || '';
-            const apiKey = provider === LLMProvider.GEMINI ? (process.env.API_KEY || '') : apiKeys[provider];
+          const { provider, apiKeys, models } = settings;
+          const model = models?.[provider] || '';
+          const apiKey =
+            provider === LLMProvider.GEMINI
+              ? process.env.API_KEY || ''
+              : apiKeys[provider];
 
-            if (!apiKey || !model) {
-                const errorMsg = !apiKey ? 'API key is missing.' : 'Model name is missing.';
-                logger.error(`Auto-summarization failed: ${errorMsg}`);
-                set({ error: `Auto-summarization failed: ${errorMsg} Please check settings.` });
-                return { messages: currentMessages, summary: session.memorySummary };
-            }
-            const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize });
-            const updatedSummary = [session.memorySummary, newSummary].filter(Boolean).join('\n\n');
-            const sysMsg: Message = { id: crypto.randomUUID(), role: 'system', content: '[System: Conversation history summarized.]', timestamp: Date.now() };
-            return { messages: [sysMsg, ...remainingMessages], summary: updatedSummary };
-        } catch (err) {
-            logger.error('Auto-summarization failed.', { error: err });
-            set({ error: "Auto-summarization failed. Check API key and model settings." });
+          if (!apiKey || !model) {
+            const errorMsg = !apiKey
+              ? 'API key is missing.'
+              : 'Model name is missing.';
+            logger.error(`Auto-summarization failed: ${errorMsg}`);
+            set({
+              error: `Auto-summarization failed: ${errorMsg} Please check settings.`,
+            });
             return { messages: currentMessages, summary: session.memorySummary };
+          }
+          const newSummary = await summarizeMessages({
+            provider,
+            apiKey,
+            model,
+            messages: messagesToSummarize,
+            previousSummary: session.memorySummary,
+          });
+          const updatedSummary = newSummary; // The new summary is now consolidated.
+          const sysMsg: Message = {
+            id: crypto.randomUUID(),
+            role: 'system',
+            content: '[System: Distant memories are summarized to preserve context.]',
+            timestamp: Date.now(),
+          };
+          return {
+            messages: [sysMsg, ...remainingMessages],
+            summary: updatedSummary,
+          };
+        } catch (err) {
+          logger.error('Auto-summarization failed.', { error: err });
+          set({
+            error: 'Auto-summarization failed. Check API key and model settings.',
+          });
+          return { messages: currentMessages, summary: session.memorySummary };
         }
       },
 
       runChatCompletion: async (character, session, messages) => {
         set({ isLoading: true, error: null });
-        const { messages: processedMessages, summary: updatedSummary } = await get().handleSummarization(session, messages);
+        const { messages: processedMessages, summary: updatedSummary } =
+          await get().handleSummarization(session, messages);
         const messagesForApi = processedMessages;
-        
+
         abortController = new AbortController();
-        
+
         const lastMessage = processedMessages[processedMessages.length - 1];
         let aiMessageId: string;
         let initialContent = '';
         let uiMessages = [...processedMessages];
 
         if (lastMessage?.role === 'assistant') {
-            aiMessageId = lastMessage.id;
-            initialContent = lastMessage.content;
+          aiMessageId = lastMessage.id;
+          initialContent = lastMessage.content;
         } else {
-            aiMessageId = crypto.randomUUID();
-            const aiMessageShell: Message = { id: aiMessageId, role: 'assistant', content: '', timestamp: Date.now() };
-            uiMessages.push(aiMessageShell);
+          aiMessageId = crypto.randomUUID();
+          const aiMessageShell: Message = {
+            id: aiMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: Date.now(),
+          };
+          uiMessages.push(aiMessageShell);
         }
 
-        set(state => ({ conversations: { ...state.conversations, [character.id]: (state.conversations[character.id] || []).map(s => s.id === session.id ? { ...s, messages: uiMessages, memorySummary: updatedSummary } : s) } }));
+        set((state) => ({
+          conversations: {
+            ...state.conversations,
+            [character.id]: (state.conversations[character.id] || []).map((s) =>
+              s.id === session.id
+                ? { ...s, messages: uiMessages, memorySummary: updatedSummary }
+                : s,
+            ),
+          },
+        }));
 
         let fullResponse = initialContent;
         try {
-            const { settings, userPersona, worlds, worldEntryInteractions } = get();
-            const { provider, apiKeys, models } = settings;
-            const apiKey = apiKeys[provider];
-            const model = models?.[provider] || '';
-            const prefill = settings.responsePrefill;
-            
-            if (provider !== LLMProvider.GEMINI && !apiKey) throw new Error(`API key for ${provider} is not set. Please configure it in Settings.`);
-            if (!model) throw new Error(`Model for ${provider} is not set. Please configure it in Settings.`);
+          const {
+            settings,
+            userPersona,
+            worlds,
+            worldEntryInteractions,
+          } = get();
+          const { provider, apiKeys, models } = settings;
+          const apiKey = apiKeys[provider];
+          const model = models?.[provider] || '';
+          const prefill = settings.responsePrefill;
 
-            const stream = getChatCompletionStream({
-                provider, apiKey, model, messages: messagesForApi,
-                characterPersona: character.persona, userPersona, globalSystemPrompt: settings.systemPrompt,
-                world: worlds.find(w => w.id === session.worldId), temperature: session.temperature ?? settings.temperature,
-                prefill, signal: abortController.signal,
-                contextSize: session.contextSize ?? settings.contextSize, maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens, memorySummary: updatedSummary,
-                characterName: character.name,
-                interactionData: worldEntryInteractions[session.worldId || ''] || {},
-            });
+          if (provider !== LLMProvider.GEMINI && !apiKey)
+            throw new Error(
+              `API key for ${provider} is not set. Please configure it in Settings.`,
+            );
+          if (!model)
+            throw new Error(
+              `Model for ${provider} is not set. Please configure it in Settings.`,
+            );
 
-            let lastRenderTime = Date.now();
-            for await (const chunk of stream) {
-                if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-                fullResponse += chunk;
+          const stream = getChatCompletionStream({
+            provider,
+            apiKey,
+            model,
+            messages: messagesForApi,
+            characterPersona: character.persona,
+            userPersona,
+            globalSystemPrompt: settings.systemPrompt,
+            world: worlds.find((w) => w.id === session.worldId),
+            temperature: session.temperature ?? settings.temperature,
+            prefill,
+            signal: abortController.signal,
+            contextSize: session.contextSize ?? settings.contextSize,
+            maxOutputTokens:
+              session.maxOutputTokens ?? settings.maxOutputTokens,
+            memorySummary: updatedSummary,
+            characterName: character.name,
+            interactionData:
+              worldEntryInteractions[session.worldId || ''] || {},
+          });
 
-                if (Date.now() - lastRenderTime > RENDER_INTERVAL) {
-                    set(state => ({ conversations: { ...state.conversations, [character.id]: (state.conversations[character.id] || []).map(s => s.id !== session.id ? s : { ...s, messages: s.messages.map(m => m.id === aiMessageId ? { ...m, content: fullResponse } : m) }) }}));
-                    lastRenderTime = Date.now();
-                }
+          let lastRenderTime = Date.now();
+          for await (const chunk of stream) {
+            if (abortController.signal.aborted)
+              throw new DOMException('Aborted', 'AbortError');
+            fullResponse += chunk;
+
+            if (Date.now() - lastRenderTime > RENDER_INTERVAL) {
+              set((state) => ({
+                conversations: {
+                  ...state.conversations,
+                  [character.id]: (
+                    state.conversations[character.id] || []
+                  ).map((s) =>
+                    s.id !== session.id
+                      ? s
+                      : {
+                          ...s,
+                          messages: s.messages.map((m) =>
+                            m.id === aiMessageId
+                              ? { ...m, content: fullResponse }
+                              : m,
+                          ),
+                        },
+                  ),
+                },
+              }));
+              lastRenderTime = Date.now();
             }
+          }
         } catch (err) {
-            const msg = extractErrorMessage(err);
-            if (msg !== 'Generation stopped by user.') {
-                set({ error: msg });
-                fullResponse = `${initialContent}Error: ${msg}`;
-                logger.error('Chat completion failed', { error: err, friendlyMessage: msg });
-            }
+          const msg = extractErrorMessage(err);
+          if (msg !== 'Generation stopped by user.') {
+            set({ error: msg });
+            fullResponse = `${initialContent}Error: ${msg}`;
+            logger.error('Chat completion failed', {
+              error: err,
+              friendlyMessage: msg,
+            });
+          }
         } finally {
-            const finalContent = fullResponse.trim();
-            set(state => ({ isLoading: false, conversations: { ...state.conversations, [character.id]: (state.conversations[character.id] || []).map(s => s.id !== session.id ? s : { ...s, messages: s.messages.map(m => m.id === aiMessageId ? { ...m, content: finalContent || '(Empty response)' } : m) }) }}));
-            if (abortController && !abortController.signal.aborted) abortController = null;
+          const finalContent = fullResponse.trim();
+          set((state) => ({
+            isLoading: false,
+            conversations: {
+              ...state.conversations,
+              [character.id]: (state.conversations[character.id] || []).map(
+                (s) =>
+                  s.id !== session.id
+                    ? s
+                    : {
+                        ...s,
+                        messages: s.messages.map((m) =>
+                          m.id === aiMessageId
+                            ? { ...m, content: finalContent || '(Empty response)' }
+                            : m,
+                        ),
+                      },
+              ),
+            },
+          }));
+          if (abortController && !abortController.signal.aborted)
+            abortController = null;
         }
       },
 
@@ -1004,8 +1109,13 @@ export const useAppStore = create<AppState & AppActions>()(
 
         let finalMessage: Message;
         try {
-          const { settings, userPersona, worlds, characters, worldEntryInteractions } =
-            get();
+          const {
+            settings,
+            userPersona,
+            worlds,
+            characters,
+            worldEntryInteractions,
+          } = get();
           const { provider, apiKeys, models } = settings;
           const apiKey = apiKeys[provider];
           const model = models?.[provider] || '';
@@ -1084,10 +1194,12 @@ export const useAppStore = create<AppState & AppActions>()(
           const currentSession = state.groupConversations[session.id];
           if (!currentSession) return state;
           // Replace last message if it was a regeneration attempt, otherwise add new
-          const lastMsg = currentSession.messages[currentSession.messages.length - 1];
-          const messages = lastMsg?.role === 'assistant' 
-            ? [...currentSession.messages.slice(0, -1), finalMessage] 
-            : [...currentSession.messages, finalMessage];
+          const lastMsg =
+            currentSession.messages[currentSession.messages.length - 1];
+          const messages =
+            lastMsg?.role === 'assistant'
+              ? [...currentSession.messages.slice(0, -1), finalMessage]
+              : [...currentSession.messages, finalMessage];
 
           return {
             isLoading: false,
@@ -1106,20 +1218,41 @@ export const useAppStore = create<AppState & AppActions>()(
         const { settings } = get();
         const { provider, apiKeys, models } = settings;
         const model = models?.[provider] || '';
-        const apiKey = provider === LLMProvider.GEMINI ? (process.env.API_KEY || '') : apiKeys[provider];
-        
-        if (!apiKey) throw new Error(`API key for ${provider} is not set. Please configure it in Settings.`);
-        if (!model) throw new Error(`Model for ${provider} is not set. Please configure it in Settings.`);
+        const apiKey =
+          provider === LLMProvider.GEMINI
+            ? process.env.API_KEY || ''
+            : apiKeys[provider];
 
-        const profile = await generateProfile({ provider, apiKey, model, concept });
-        return { name: profile.name, greeting: profile.greeting, description: profile.description, persona: profile.persona };
+        if (!apiKey)
+          throw new Error(
+            `API key for ${provider} is not set. Please configure it in Settings.`,
+          );
+        if (!model)
+          throw new Error(
+            `Model for ${provider} is not set. Please configure it in Settings.`,
+          );
+
+        const profile = await generateProfile({
+          provider,
+          apiKey,
+          model,
+          concept,
+        });
+        return {
+          name: profile.name,
+          greeting: profile.greeting,
+          description: profile.description,
+          persona: profile.persona,
+        };
       },
 
       getAppState: () => {
         const state = get();
         const stateToLog: Partial<AppState> = { ...state };
-        const functions = Object.entries(stateToLog).filter(([_, value]) => typeof value === 'function').map(([key]) => key);
-        functions.forEach(key => delete stateToLog[key as keyof AppState]);
+        const functions = Object.entries(stateToLog)
+          .filter(([_, value]) => typeof value === 'function')
+          .map(([key]) => key);
+        functions.forEach((key) => delete stateToLog[key as keyof AppState]);
         return stateToLog;
       },
     }),
@@ -1138,6 +1271,6 @@ export const useAppStore = create<AppState & AppActions>()(
         activeGroupSessionId: state.activeGroupSessionId,
         worldEntryInteractions: state.worldEntryInteractions,
       }),
-    }
-  )
+    },
+  ),
 );

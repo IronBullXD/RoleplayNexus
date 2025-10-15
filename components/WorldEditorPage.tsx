@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { World, WorldEntry, WorldEntryCategory } from '../types';
+import { World, WorldEntry, WorldEntryCategory, ValidationIssue } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { validateWorld } from '../services/worldValidationService';
+import ValidationResultsPanel from './ValidationResultsPanel';
 
 interface WorldEditorPageProps {
   world: Partial<World> | null;
@@ -23,6 +25,11 @@ const categoryIcons: Record<WorldEntryCategory, string> = {
 };
 
 const categoryOptions = Object.values(WorldEntryCategory);
+
+// Type guard to safely check if a string is a valid WorldEntryCategory
+const isWorldEntryCategory = (value: string): value is WorldEntryCategory => {
+  return categoryOptions.includes(value as WorldEntryCategory);
+};
 
 interface EntryEditorProps {
   entry: WorldEntry;
@@ -257,13 +264,14 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
         <select
           id={`entry-category-${entry.id}`}
           value={entry.category || ''}
-          onChange={(e) =>
+          onChange={(e) => {
+            const value = e.target.value;
             onEntryChange(
               entry.id,
               'category',
-              e.target.value as WorldEntryCategory,
-            )
-          }
+              isWorldEntryCategory(value) ? value : undefined,
+            );
+          }}
           className="block w-full bg-slate-800 border-2 border-slate-700 rounded-lg p-2 text-sm focus:ring-crimson-500 focus:border-crimson-500"
         >
           <option value="">(No Category)</option>
@@ -365,6 +373,8 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [entrySearch, setEntrySearch] = useState('');
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
 
   useEffect(() => {
     if (world) {
@@ -396,6 +406,8 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
         setActiveEntryId(processedEntries[0].id);
       else setActiveEntryId(null);
     }
+    setIsValidationPanelOpen(false);
+    setValidationIssues([]);
   }, [world]);
 
   const handleChange = (
@@ -472,23 +484,36 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
       ...entry,
       keys: (entry.keys || []).map((k) => k.trim()).filter(Boolean),
     }));
-    onSave({
+    // Construct a valid World object to avoid `as` casting and ensure type safety.
+    const worldToSave: World = {
       id: formData.id || crypto.randomUUID(),
       name: formData.name || 'Unnamed World',
-      description: formData.description || '',
-      avatar: formData.avatar || '',
+      description: formData.description || '', // Provide default for required field
+      avatar: formData.avatar, // Optional field, can be undefined
       entries: finalEntries,
-    });
+    };
+    onSave(worldToSave);
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !isValidationPanelOpen) onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isValidationPanelOpen]);
 
+  const handleValidate = () => {
+    const issues = validateWorld(formData as World);
+    setValidationIssues(issues);
+    setIsValidationPanelOpen(true);
+  };
+
+  const handleSelectEntryFromIssue = (entryId: string) => {
+    setActiveEntryId(entryId);
+    setIsValidationPanelOpen(false);
+  };
+  
   const activeEntry = useMemo(
     () => formData.entries?.find((e) => e.id === activeEntryId),
     [formData.entries, activeEntryId],
@@ -517,220 +542,244 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     return Object.entries(grouped).sort((a, b) => {
       if (a[0] === UNCATEGORIZED) return 1;
       if (b[0] === UNCATEGORIZED) return -1;
-      return (
-        categoryOptions.indexOf(a[0] as WorldEntryCategory) -
-        categoryOptions.indexOf(b[0] as WorldEntryCategory)
-      );
+      const aIndex = isWorldEntryCategory(a[0])
+        ? categoryOptions.indexOf(a[0])
+        : -1;
+      const bIndex = isWorldEntryCategory(b[0])
+        ? categoryOptions.indexOf(b[0])
+        : -1;
+      return aIndex - bIndex;
     });
   }, [filteredEntries]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <>
       <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 20, opacity: 0 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col border border-slate-700"
-        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm"
+        onClick={onClose}
       >
-        <form
-          onSubmit={handleSubmit}
-          className="flex-1 flex flex-col overflow-hidden"
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col border border-slate-700"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden">
-            {/* Left Column: Navigation & Entry List */}
-            <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50">
-              <div className="p-4 border-b border-slate-800 shrink-0 space-y-4">
-                <div className="flex items-center gap-4">
-                  <Avatar
-                    src={formData.avatar}
-                    alt={formData.name || 'World'}
-                    className="w-12 h-12"
-                    shape="square"
-                  />
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="w-full bg-transparent text-lg font-bold font-display tracking-wider border-0 focus:ring-0 p-0"
-                    placeholder="World Name"
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Icon
-                    name="search"
-                    className="w-4 h-4 text-slate-500 absolute top-1/2 left-3 -translate-y-1/2"
-                  />
-                  <input
-                    type="text"
-                    value={entrySearch}
-                    onChange={(e) => setEntrySearch(e.target.value)}
-                    placeholder="Search entries..."
-                    className="w-full bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 pl-9 pr-3 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddNewEntry}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold text-crimson-300 bg-crimson-900/50 border border-crimson-700/70 rounded-lg hover:bg-crimson-800/50 transition-colors"
-                >
-                  <Icon name="add" className="w-4 h-4" /> New Lore Entry
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                {entriesByCategory.length > 0 ? (
-                  entriesByCategory.map(([category, entries]) => (
-                    <div key={category} className="mb-3">
-                      <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 px-2 py-1">
-                        <Icon
-                          name={
-                            categoryIcons[category as WorldEntryCategory] ||
-                            'book-open'
-                          }
-                          className="w-3.5 h-3.5"
-                        />
-                        {category}
-                      </h3>
-                      <div className="space-y-1 mt-1">
-                        {entries.map((entry) => (
-                          <button
-                            type="button"
-                            key={entry.id}
-                            onClick={() => setActiveEntryId(entry.id)}
-                            className={`w-full text-left p-2 rounded-md flex items-center justify-between group ${
-                              activeEntryId === entry.id
-                                ? 'bg-crimson-600/20'
-                                : 'hover:bg-slate-800/70'
-                            }`}
-                          >
-                            <span
-                              className={`flex-1 truncate text-sm ${
-                                activeEntryId === entry.id
-                                  ? 'text-crimson-300 font-semibold'
-                                  : 'text-slate-300'
-                              }`}
-                            >
-                              {entry.name || 'Unnamed Entry'}
-                            </span>
-                            <div className="flex items-center">
-                              {!entry.enabled && (
-                                <Tooltip content="Disabled" position="top">
-                                  <Icon
-                                    name="minus-square"
-                                    className="w-4 h-4 text-slate-500 mr-2"
-                                  />
-                                </Tooltip>
-                              )}
-                              <button
-                                onClick={(e) => handleDeleteEntry(e, entry.id)}
-                                className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                              >
-                                <Icon name="delete" className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-slate-600 p-8">
-                    <Icon name="book-open" className="w-12 h-12 mx-auto" />
-                    <p className="mt-2 text-sm">No lore entries yet.</p>
-                  </div>
-                )}
-              </div>
-            </aside>
-
-            {/* Center Column: Editor */}
-            <main className="w-full flex flex-col">
-              {activeEntry ? (
-                <>
-                  <div className="p-4 border-b border-slate-800 shrink-0">
+          <form
+            onSubmit={handleSubmit}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden">
+              {/* Left Column: Navigation & Entry List */}
+              <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50">
+                <div className="p-4 border-b border-slate-800 shrink-0 space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar
+                      src={formData.avatar}
+                      alt={formData.name || 'World'}
+                      className="w-12 h-12"
+                      shape="square"
+                    />
                     <input
                       type="text"
-                      value={activeEntry.name || ''}
-                      onChange={(e) =>
-                        handleEntryChange(activeEntry.id, 'name', e.target.value)
-                      }
-                      className="w-full bg-transparent text-lg font-bold border-0 focus:ring-0 p-0"
-                      placeholder="Entry Name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="w-full bg-transparent text-lg font-bold font-display tracking-wider border-0 focus:ring-0 p-0"
+                      placeholder="World Name"
+                      required
                     />
                   </div>
-                  <div className="flex-1 overflow-y-auto relative">
-                    <textarea
-                      value={activeEntry.content}
-                      onChange={(e) =>
-                        handleEntryChange(
-                          activeEntry.id,
-                          'content',
-                          e.target.value,
-                        )
-                      }
-                      className="w-full h-full bg-slate-950 p-4 resize-none border-0 focus:ring-0 custom-scrollbar absolute inset-0 text-sm leading-relaxed"
-                      placeholder="Enter lore content here... You can use markdown for bold and italics."
+                  <div className="relative">
+                    <Icon
+                      name="search"
+                      className="w-4 h-4 text-slate-500 absolute top-1/2 left-3 -translate-y-1/2"
+                    />
+                    <input
+                      type="text"
+                      value={entrySearch}
+                      onChange={(e) => setEntrySearch(e.target.value)}
+                      placeholder="Search entries..."
+                      className="w-full bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 pl-9 pr-3 text-sm"
                     />
                   </div>
-                </>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-600 text-center">
-                  <div>
-                    <Icon name="add" className="w-16 h-16 mx-auto" />
-                    <p className="mt-4 font-semibold">
-                      Create a new entry to get started.
+                  <button
+                    type="button"
+                    onClick={handleAddNewEntry}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold text-crimson-300 bg-crimson-900/50 border border-crimson-700/70 rounded-lg hover:bg-crimson-800/50 transition-colors"
+                  >
+                    <Icon name="add" className="w-4 h-4" /> New Lore Entry
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                  {entriesByCategory.length > 0 ? (
+                    entriesByCategory.map(([category, entries]) => (
+                      <div key={category} className="mb-3">
+                        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 px-2 py-1">
+                          <Icon
+                            name={
+                              categoryIcons[category as WorldEntryCategory] ||
+                              'book-open'
+                            }
+                            className="w-3.5 h-3.5"
+                          />
+                          {category}
+                        </h3>
+                        <div className="space-y-1 mt-1">
+                          {entries.map((entry) => (
+                            <button
+                              type="button"
+                              key={entry.id}
+                              onClick={() => setActiveEntryId(entry.id)}
+                              className={`w-full text-left p-2 rounded-md flex items-center justify-between group ${
+                                activeEntryId === entry.id
+                                  ? 'bg-crimson-600/20'
+                                  : 'hover:bg-slate-800/70'
+                              }`}
+                            >
+                              <span
+                                className={`flex-1 truncate text-sm ${
+                                  activeEntryId === entry.id
+                                    ? 'text-crimson-300 font-semibold'
+                                    : 'text-slate-300'
+                                }`}
+                              >
+                                {entry.name || 'Unnamed Entry'}
+                              </span>
+                              <div className="flex items-center">
+                                {!entry.enabled && (
+                                  <Tooltip content="Disabled" position="top">
+                                    <Icon
+                                      name="minus-square"
+                                      className="w-4 h-4 text-slate-500 mr-2"
+                                    />
+                                  </Tooltip>
+                                )}
+                                <button
+                                  onClick={(e) => handleDeleteEntry(e, entry.id)}
+                                  className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                >
+                                  <Icon name="delete" className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-600 p-8">
+                      <Icon name="book-open" className="w-12 h-12 mx-auto" />
+                      <p className="mt-2 text-sm">No lore entries yet.</p>
+                    </div>
+                  )}
+                </div>
+              </aside>
+
+              {/* Center Column: Editor */}
+              <main className="w-full flex flex-col">
+                {activeEntry ? (
+                  <>
+                    <div className="p-4 border-b border-slate-800 shrink-0">
+                      <input
+                        type="text"
+                        value={activeEntry.name || ''}
+                        onChange={(e) =>
+                          handleEntryChange(activeEntry.id, 'name', e.target.value)
+                        }
+                        className="w-full bg-transparent text-lg font-bold border-0 focus:ring-0 p-0"
+                        placeholder="Entry Name"
+                      />
+                    </div>
+                    <div className="flex-1 overflow-y-auto relative">
+                      <textarea
+                        value={activeEntry.content}
+                        onChange={(e) =>
+                          handleEntryChange(
+                            activeEntry.id,
+                            'content',
+                            e.target.value,
+                          )
+                        }
+                        className="w-full h-full bg-slate-950 p-4 resize-none border-0 focus:ring-0 custom-scrollbar absolute inset-0 text-sm leading-relaxed"
+                        placeholder="Enter lore content here... You can use markdown for bold and italics."
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-600 text-center">
+                    <div>
+                      <Icon name="add" className="w-16 h-16 mx-auto" />
+                      <p className="mt-4 font-semibold">
+                        Create a new entry to get started.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </main>
+
+              {/* Right Column: Inspector */}
+              <aside className="w-full border-l border-slate-800 overflow-y-auto p-4 custom-scrollbar bg-slate-900/50">
+                {activeEntry ? (
+                  <EntryInspectorPanel
+                    entry={activeEntry}
+                    allEntries={formData.entries || []}
+                    onEntryChange={handleEntryChange}
+                  />
+                ) : (
+                  <div className="text-center text-slate-600 pt-8">
+                    <Icon name="settings" className="w-12 h-12 mx-auto" />
+                    <p className="mt-2 text-sm">
+                      Select an entry to edit its properties.
                     </p>
                   </div>
-                </div>
-              )}
-            </main>
-
-            {/* Right Column: Inspector */}
-            <aside className="w-full border-l border-slate-800 overflow-y-auto p-4 custom-scrollbar bg-slate-900/50">
-              {activeEntry ? (
-                <EntryInspectorPanel
-                  entry={activeEntry}
-                  allEntries={formData.entries || []}
-                  onEntryChange={handleEntryChange}
-                />
-              ) : (
-                <div className="text-center text-slate-600 pt-8">
-                  <Icon name="settings" className="w-12 h-12 mx-auto" />
-                  <p className="mt-2 text-sm">
-                    Select an entry to edit its properties.
-                  </p>
-                </div>
-              )}
-            </aside>
-          </div>
-          <footer className="p-4 border-t border-slate-800 flex justify-end space-x-3 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 border border-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
-            >
-              Save World
-            </button>
-          </footer>
-        </form>
+                )}
+              </aside>
+            </div>
+            <footer className="p-4 border-t border-slate-800 flex justify-between items-center shrink-0">
+              <button
+                type="button"
+                onClick={handleValidate}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"
+              >
+                <Icon name="shield-check" className="w-4 h-4" /> Validate World
+              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 border border-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
+                >
+                  Save World
+                </button>
+              </div>
+            </footer>
+          </form>
+        </motion.div>
       </motion.div>
-    </motion.div>
+      <AnimatePresence>
+        {isValidationPanelOpen && (
+          <ValidationResultsPanel 
+            issues={validationIssues}
+            onClose={() => setIsValidationPanelOpen(false)}
+            onSelectEntry={handleSelectEntryFromIssue}
+            worldName={formData.name || 'Unnamed World'}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

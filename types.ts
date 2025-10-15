@@ -117,3 +117,12 @@ export interface GroupTurnAction {
   characterName: string;
   content: string;
 }
+
+export interface ValidationIssue {
+  type: 'DuplicateKeyword' | 'UnusedEntry' | 'MissingName' | 'ShortContent' | 'OverlappingKeyword';
+  severity: 'warning' | 'info';
+  message: string;
+  entryIds: string[];
+  // e.g., the duplicate keyword itself, or the overlapping keywords
+  relatedData?: { keyword?: string, otherKeyword?: string, otherEntryNames?: string[] };
+}
