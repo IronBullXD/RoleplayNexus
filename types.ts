@@ -35,7 +35,6 @@ export interface Message {
   content: string;
   timestamp?: number;
   characterId?: string; // For group chats
-  thinking?: string;
 }
 
 export enum WorldEntryCategory {
@@ -72,7 +71,6 @@ export interface ChatSession {
   messages: Message[];
   worldId?: string | null;
   temperature?: number;
-  thinkingEnabled?: boolean;
   contextSize?: number;
   maxOutputTokens?: number;
   memorySummary?: string;
@@ -87,7 +85,6 @@ export interface GroupChatSession {
   messages: Message[];
   worldId?: string | null;
   temperature?: number;
-  thinkingEnabled?: boolean;
   contextSize?: number;
   maxOutputTokens?: number;
   memorySummary?: string;
@@ -108,7 +105,6 @@ export interface Settings {
   maxOutputTokens: number;
   temperature: number;
   worldId: string | null;
-  thinkingEnabled: boolean;
 }
 
 export type View =
@@ -116,3 +112,8 @@ export type View =
   | 'CHAT'
   | 'GROUP_CHAT_SETUP'
   | 'GROUP_CHAT';
+
+export interface GroupTurnAction {
+  characterName: string;
+  content: string;
+}

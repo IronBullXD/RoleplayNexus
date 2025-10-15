@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { Character } from './types';
 import ChatWindow from './components/ChatWindow';
@@ -13,6 +13,8 @@ import ConfirmationModal from './components/ConfirmationModal';
 import PersonaEditor from './components/PersonaEditor';
 import DebugWindow from './components/DebugWindow';
 import { logger } from './services/logger';
+import { AnimatePresence } from 'framer-motion';
+import BackgroundAnimation from './components/BackgroundAnimation';
 
 function App() {
   const {
@@ -35,16 +37,12 @@ function App() {
   );
   const characters = useAppStore((state) => state.characters);
 
-  const activeCharacter = useMemo(
-    () => characters.find((c) => c.id === activeCharacterId),
-    [characters, activeCharacterId],
-  );
-
   useEffect(() => {
     initStore(); // Ensures GM character is present on startup
   }, [initStore]);
 
   useEffect(() => {
+    const activeCharacter = characters.find((c) => c.id === activeCharacterId);
     if (
       (currentView === 'CHAT' && (!activeCharacter || !activeSessionId)) ||
       (currentView === 'GROUP_CHAT' && !activeGroupSessionId)
@@ -57,7 +55,13 @@ function App() {
       });
       useAppStore.getState().resetChatView();
     }
-  }, [currentView, activeCharacter, activeSessionId, activeGroupSessionId]);
+  }, [
+    currentView,
+    characters,
+    activeCharacterId,
+    activeSessionId,
+    activeGroupSessionId,
+  ]);
 
   // --- Modal State Management ---
   const [isCharacterEditorOpen, setIsCharacterEditorOpen] = useState(false);
@@ -112,41 +116,53 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans bg-gaming-pattern overflow-hidden">
+    <div className="h-screen w-full text-slate-100 font-sans overflow-hidden relative">
+      <BackgroundAnimation />
       {renderView()}
 
       {/* --- Modals --- */}
-      {isCharacterEditorOpen && (
-        <CharacterEditor
-          character={editingCharacter}
-          onClose={() => setIsCharacterEditorOpen(false)}
-        />
-      )}
-      {isPersonaEditorOpen && (
-        <PersonaEditor
-          persona={userPersona}
-          onClose={() => setIsPersonaEditorOpen(false)}
-        />
-      )}
-      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
-      {isHistoryOpen && <HistoryModal onClose={() => setIsHistoryOpen(false)} />}
-      {isWorldsModalOpen && (
-        <WorldsPage worlds={worlds} onClose={() => setIsWorldsModalOpen(false)} />
-      )}
-      <ConfirmationModal
-        isOpen={isConfirmationModalOpen}
-        onClose={handleCloseConfirmation}
-        onConfirm={handleConfirm}
-        title={confirmationAction?.title || ''}
-        message={confirmationAction?.message || ''}
-        confirmButtonText={confirmationAction?.confirmText}
-        confirmButtonVariant={confirmationAction?.confirmVariant}
-      />
-      <DebugWindow
-        isOpen={isDebugWindowOpen}
-        onClose={() => setIsDebugWindowOpen(false)}
-        appState={getAppState()}
-      />
+      <AnimatePresence>
+        {isCharacterEditorOpen && (
+          <CharacterEditor
+            character={editingCharacter}
+            onClose={() => setIsCharacterEditorOpen(false)}
+          />
+        )}
+        {isPersonaEditorOpen && (
+          <PersonaEditor
+            persona={userPersona}
+            onClose={() => setIsPersonaEditorOpen(false)}
+          />
+        )}
+        {isSettingsOpen && (
+          <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+        )}
+        {isHistoryOpen && (
+          <HistoryModal onClose={() => setIsHistoryOpen(false)} />
+        )}
+        {isWorldsModalOpen && (
+          <WorldsPage
+            worlds={worlds}
+            onClose={() => setIsWorldsModalOpen(false)}
+          />
+        )}
+        {isConfirmationModalOpen && (
+          <ConfirmationModal
+            onClose={handleCloseConfirmation}
+            onConfirm={handleConfirm}
+            title={confirmationAction?.title || ''}
+            message={confirmationAction?.message || ''}
+            confirmButtonText={confirmationAction?.confirmText}
+            confirmButtonVariant={confirmationAction?.confirmVariant}
+          />
+        )}
+        {isDebugWindowOpen && (
+          <DebugWindow
+            onClose={() => setIsDebugWindowOpen(false)}
+            appState={getAppState()}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

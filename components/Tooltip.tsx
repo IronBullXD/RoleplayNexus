@@ -5,9 +5,10 @@ interface TooltipProps {
   children: React.ReactElement;
   position?: 'top' | 'bottom';
   className?: string;
+  onShow?: () => void;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', className = '' }) => {
+export const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', className = '', onShow }) => {
   const positionClasses = {
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
     bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
@@ -26,7 +27,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 
   if (!content) return children;
 
   return (
-    <div className="relative inline-flex group/tooltip">
+    <div className="relative inline-flex group/tooltip" onMouseEnter={onShow}>
       {children}
       <div
         role="tooltip"

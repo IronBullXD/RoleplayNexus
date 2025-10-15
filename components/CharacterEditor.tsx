@@ -3,6 +3,7 @@ import { Character, StructuredPersona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
+import { motion } from 'framer-motion';
 
 interface CharacterEditorProps {
   character: Character | null;
@@ -55,10 +56,45 @@ const serializePersona = (structured: StructuredPersona): string =>
     .filter(Boolean)
     .join('\n\n');
 
-const CharacterEditor: React.FC<CharacterEditorProps> = ({
-  character,
-  onClose,
-}) => {
+interface PersonaFieldProps {
+  name: keyof StructuredPersona;
+  label: string;
+  placeholder: string;
+  rows?: number;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+}
+
+function PersonaField({
+  name,
+  label,
+  placeholder,
+  rows = 3,
+  value,
+  onChange,
+}: PersonaFieldProps) {
+  return (
+    <div>
+      <label
+        htmlFor={name}
+        className="block text-sm font-medium text-slate-300 tracking-wider"
+      >
+        {label}
+      </label>
+      <textarea
+        name={name}
+        id={name}
+        value={value}
+        onChange={onChange}
+        rows={rows}
+        className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function CharacterEditor({ character, onClose }: CharacterEditorProps) {
   const { saveCharacter, generateCharacterProfile } = useAppStore();
   const [formData, setFormData] = useState<Partial<Character>>({
     name: '',
@@ -154,38 +190,21 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
     }
   };
 
-  const PersonaField: React.FC<{
-    name: keyof StructuredPersona;
-    label: string;
-    placeholder: string;
-    rows?: number;
-  }> = ({ name, label, placeholder, rows = 3 }) => (
-    <div>
-      <label
-        htmlFor={name}
-        className="block text-sm font-medium text-slate-300 tracking-wider"
-      >
-        {label}
-      </label>
-      <textarea
-        name={name}
-        id={name}
-        value={structuredPersona[name]}
-        onChange={handleStructuredPersonaChange}
-        rows={rows}
-        className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
-        placeholder={placeholder}
-      />
-    </div>
-  );
-
   return (
-    <div
-      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div
-        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 animate-slide-up"
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 20, opacity: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
@@ -196,7 +215,7 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
             <button
               type="button"
               onClick={() => setIsAIAssistOpen(!isAIAssistOpen)}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-sky-300 bg-sky-900/50 border border-sky-700/70 rounded-md hover:bg-sky-800/50 transition-colors shadow-inner shadow-sky-900/50"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-crimson-300 bg-crimson-900/50 border border-crimson-700/70 rounded-md hover:bg-crimson-800/50 transition-colors shadow-inner shadow-crimson-900/50"
             >
               <Icon name="sparkles" className="w-3.5 h-3.5" /> AI ASSIST
             </button>
@@ -208,10 +227,13 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
             <Icon name="close" />
           </button>
         </header>
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
             {isAIAssistOpen && (
-              <div className="p-4 mb-6 bg-slate-800/50 rounded-lg border-l-4 border-sky-500 animate-fade-in space-y-3 shadow-lg shadow-sky-900/20">
+              <div className="p-4 mb-6 bg-slate-800/50 rounded-lg border-l-4 border-crimson-500 animate-fade-in space-y-3 shadow-lg shadow-crimson-900/20">
                 <label
                   htmlFor="ai-concept"
                   className="block text-sm font-medium text-slate-200 font-display tracking-wider"
@@ -219,7 +241,8 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                   CHARACTER CONCEPT
                 </label>
                 <p className="text-xs text-slate-400">
-                  Describe your character idea, and the AI will generate a profile.
+                  Describe your character idea, and the AI will generate a
+                  profile.
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -227,24 +250,28 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     id="ai-concept"
                     value={aiConcept}
                     onChange={(e) => setAiConcept(e.target.value)}
-                    className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-2 placeholder:text-slate-600"
+                    className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-2 placeholder:text-slate-600"
                     disabled={isGenerating}
                   />
                   <button
                     type="button"
                     onClick={handleGenerateClick}
                     disabled={isGenerating || !aiConcept.trim()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-wait flex items-center gap-2 shrink-0 border border-sky-400/50 shadow-md shadow-sky-900/50"
+                    className="px-4 py-2 text-sm font-medium text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-wait flex items-center gap-2 shrink-0 border border-crimson-400/50 shadow-md shadow-crimson-900/50"
                   >
                     <Icon
                       name={isGenerating ? 'redo' : 'sparkles'}
-                      className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`}
+                      className={`w-4 h-4 ${
+                        isGenerating ? 'animate-spin' : ''
+                      }`}
                     />
                     {isGenerating ? 'Generating...' : 'Generate'}
                   </button>
                 </div>
                 {generationError && (
-                  <p className="text-xs text-red-400 mt-2">{generationError}</p>
+                  <p className="text-xs text-red-400 mt-2">
+                    {generationError}
+                  </p>
                 )}
               </div>
             )}
@@ -254,7 +281,8 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                   <Avatar
                     src={formData.avatar}
                     alt="avatar"
-                    className="w-24 h-24 border-2 border-slate-700"
+                    shape="square"
+                    className="w-24 h-36 border-2 border-slate-700"
                   />
                   <button
                     type="button"
@@ -278,7 +306,7 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     id="name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-lg p-3 placeholder:text-slate-600"
+                    className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-lg p-3 placeholder:text-slate-600"
                     required
                     pattern=".*\S+.*"
                     title="The character name cannot be empty or just spaces."
@@ -287,15 +315,17 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="text-sm text-sky-400 hover:underline"
+                      className="text-sm text-crimson-400 hover:underline"
                     >
                       Upload Image
                     </button>
                     {formData.avatar && (
                       <button
                         type="button"
-                        onClick={() => setFormData((p) => ({ ...p, avatar: '' }))}
-                        className="text-sm text-fuchsia-500 hover:underline"
+                        onClick={() =>
+                          setFormData((p) => ({ ...p, avatar: '' }))
+                        }
+                        className="text-sm text-ember-500 hover:underline"
                       >
                         Remove Image
                       </button>
@@ -323,7 +353,7 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                   value={formData.greeting}
                   onChange={handleChange}
                   rows={2}
-                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
+                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
                   placeholder="The first message your character will send."
                 />
               </div>
@@ -340,7 +370,7 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                   value={formData.description}
                   onChange={handleChange}
                   rows={2}
-                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
+                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
                   placeholder="A brief summary shown in the character list."
                 />
               </div>
@@ -349,34 +379,44 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
                   PERSONA
                 </label>
                 <p className="text-xs text-slate-400 mt-1 mb-2">
-                  Describe the character's core identity. These fields create the
-                  final prompt for the AI.
+                  Describe the character's core identity. These fields create
+                  the final prompt for the AI.
                 </p>
                 <div className="space-y-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
                   <PersonaField
                     name="appearance"
                     label="Appearance"
                     placeholder="Physical description, clothing, etc."
+                    value={structuredPersona.appearance}
+                    onChange={handleStructuredPersonaChange}
                   />
                   <PersonaField
                     name="personality"
                     label="Personality"
                     placeholder="Key traits, behaviors, and mannerisms."
+                    value={structuredPersona.personality}
+                    onChange={handleStructuredPersonaChange}
                   />
                   <PersonaField
                     name="speakingStyle"
                     label="Speaking Style"
                     placeholder="Voice, accent, vocabulary, etc."
+                    value={structuredPersona.speakingStyle}
+                    onChange={handleStructuredPersonaChange}
                   />
                   <PersonaField
                     name="background"
                     label="Background"
                     placeholder="A brief history of the character."
+                    value={structuredPersona.background}
+                    onChange={handleStructuredPersonaChange}
                   />
                   <PersonaField
                     name="motivations"
                     label="Motivations"
                     placeholder="What drives the character's actions."
+                    value={structuredPersona.motivations}
+                    onChange={handleStructuredPersonaChange}
                   />
                 </div>
               </div>
@@ -392,15 +432,15 @@ const CharacterEditor: React.FC<CharacterEditorProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors border border-sky-400/50 shadow-md shadow-sky-900/50"
+              className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
             >
               Save Character
             </button>
           </footer>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
-};
+}
 
 export default CharacterEditor;

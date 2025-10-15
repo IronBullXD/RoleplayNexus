@@ -4,6 +4,7 @@ import { Icon } from './Icon';
 import Avatar from './Avatar';
 import WorldEditorPage from './WorldEditorPage';
 import { useAppStore } from '../store/useAppStore';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CustomCheckbox: React.FC<{
   checked: boolean;
@@ -29,13 +30,16 @@ const CustomCheckbox: React.FC<{
           id={id}
           checked={checked}
           onChange={onChange}
-          className="appearance-none w-5 h-5 border-2 border-slate-600 rounded-md checked:bg-sky-500 checked:border-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-sky-500 transition-colors cursor-pointer"
+          className="appearance-none w-5 h-5 border-2 border-slate-600 rounded-md checked:bg-crimson-500 checked:border-crimson-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-crimson-500 transition-colors cursor-pointer"
         />
         {checked && !indeterminate && (
-          <Icon name="checkmark" className="w-4 h-4 text-white absolute pointer-events-none" />
+          <Icon
+            name="checkmark"
+            className="w-4 h-4 text-white absolute pointer-events-none"
+          />
         )}
         {indeterminate && (
-          <div className="w-2.5 h-1 bg-sky-500 rounded-sm absolute pointer-events-none" />
+          <div className="w-2.5 h-1 bg-crimson-500 rounded-sm absolute pointer-events-none" />
         )}
       </div>
       {label && (
@@ -67,8 +71,8 @@ const WorldItem: React.FC<{
     onClick={onToggleSelect}
     className={`w-full flex items-center gap-2 p-2 pr-4 bg-slate-900/50 border hover:bg-slate-800/50 rounded-lg transition-all group cursor-pointer ${
       isSelected
-        ? 'border-sky-500/80 bg-slate-800/50'
-        : 'border-slate-800 hover:border-sky-500/50'
+        ? 'border-crimson-500/80 bg-slate-800/50'
+        : 'border-slate-800 hover:border-crimson-500/50'
     }`}
   >
     <div className="flex items-center pl-2" onClick={(e) => e.stopPropagation()}>
@@ -98,21 +102,21 @@ const WorldItem: React.FC<{
     >
       <button
         onClick={onEdit}
-        className="p-2 text-slate-400 hover:text-sky-400 hover:bg-slate-700/50 rounded-md"
+        className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
         aria-label={`Edit world: ${world.name}`}
       >
         <Icon name="edit" className="w-5 h-5" />
       </button>
       <button
         onClick={onExport}
-        className="p-2 text-slate-400 hover:text-sky-400 hover:bg-slate-700/50 rounded-md"
+        className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
         aria-label={`Export world: ${world.name}`}
       >
         <Icon name="export" className="w-5 h-5" />
       </button>
       <button
         onClick={onDelete}
-        className="p-2 text-slate-400 hover:text-fuchsia-500 hover:bg-slate-700/50 rounded-md"
+        className="p-2 text-slate-400 hover:text-ember-500 hover:bg-slate-700/50 rounded-md"
         aria-label={`Delete world: ${world.name}`}
       >
         <Icon name="delete" className="w-5 h-5" />
@@ -182,7 +186,11 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
           if (
             Array.isArray(imported) &&
             imported.every(
-              (item) => item && 'id' in item && 'name' in item && 'entries' in item,
+              (item) =>
+                item &&
+                'id' in item &&
+                'name' in item &&
+                'entries' in item,
             )
           ) {
             importWorlds(imported);
@@ -202,7 +210,7 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
 
   const handleExportWorld = (world: World) => {
     try {
-      const filename = `world_${world.name
+      const filename = `${world.name
         .replace(/[^a-z0-9]/gi, '_')
         .toLowerCase()}.json`;
       const blob = new Blob([JSON.stringify([world], null, 2)], {
@@ -232,7 +240,12 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
     }
     const worldsToExport = worlds.filter((w) => selectedWorldIds.has(w.id));
     try {
-      const filename = `roleplay_nexus_worlds_selected.json`;
+      const filename =
+        worldsToExport.length === 1
+          ? `${worldsToExport[0].name
+              .replace(/[^a-z0-9]/gi, '_')
+              .toLowerCase()}.json`
+          : `roleplay_nexus_worlds_selected.json`;
       const blob = new Blob([JSON.stringify(worldsToExport, null, 2)], {
         type: 'application/json',
       });
@@ -253,17 +266,26 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
     }
   };
 
-  const allSelected = worlds.length > 0 && selectedWorldIds.size === worlds.length;
+  const allSelected =
+    worlds.length > 0 && selectedWorldIds.size === worlds.length;
   const isIndeterminate = selectedWorldIds.size > 0 && !allSelected;
 
   return (
     <>
-      <div
-        className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-40 backdrop-blur-sm animate-fade-in"
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-40 backdrop-blur-sm"
         onClick={onClose}
       >
-        <div
-          className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-4xl flex flex-col border border-slate-700 h-[80vh] animate-slide-up"
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-4xl flex flex-col border border-slate-700 h-[80vh]"
           onClick={(e) => e.stopPropagation()}
         >
           <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
@@ -316,8 +338,8 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
                     No Worlds Found
                   </h3>
                   <p className="mt-1 max-w-sm">
-                    Worlds provide context and lore for your chats. Create one to
-                    get started.
+                    Worlds provide context and lore for your chats. Create one
+                    to get started.
                   </p>
                 </div>
               )}
@@ -351,20 +373,22 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
             </div>
             <button
               onClick={handleCreateNew}
-              className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors border border-sky-400/50 shadow-md shadow-sky-900/50"
+              className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
             >
               Create New World
             </button>
           </footer>
-        </div>
-      </div>
-      {isEditorOpen && (
-        <WorldEditorPage
-          world={editingWorld}
-          onSave={handleSave}
-          onClose={() => setIsEditorOpen(false)}
-        />
-      )}
+        </motion.div>
+      </motion.div>
+      <AnimatePresence>
+        {isEditorOpen && (
+          <WorldEditorPage
+            world={editingWorld}
+            onSave={handleSave}
+            onClose={() => setIsEditorOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 };

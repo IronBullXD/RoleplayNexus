@@ -1,12 +1,154 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { Message, LLMProvider, World, Persona, WorldEntry } from '../types';
+import {
+  Message,
+  LLMProvider,
+  World,
+  Persona,
+  WorldEntry,
+  GroupTurnAction,
+} from '../types';
 import { API_ENDPOINTS } from '../constants';
 import { logger } from './logger';
+
+// Instantiate the Gemini client once at the module level.
+// Per guidelines, Gemini API key MUST come from the environment.
+const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Module-level cache for pre-computed world indices.
+const worldIndexCache = new Map<string, { index: any; entriesJSON: string }>();
+
+/**
+ * Merges consecutive messages from the same role (user or assistant) into a single message.
+ * This is crucial for models like Gemini that require a strict alternating user/model sequence,
+ * preventing errors that can occur after chat history edits.
+ * @param messages An array of messages.
+ * @returns A new array of messages with consecutive roles merged.
+ */
+function mergeConsecutiveRoleMessages(messages: Message[]): Message[] {
+  if (messages.length < 2) {
+    return messages;
+  }
+
+  const mergedMessages: Message[] = [];
+  // Create a copy to avoid mutating the original array from the store
+  const tempMessages = JSON.parse(JSON.stringify(messages));
+
+  while (tempMessages.length > 0) {
+    let currentMessage = tempMessages.shift()!;
+    // System messages are not merged
+    if (currentMessage.role === 'system') {
+      mergedMessages.push(currentMessage);
+      continue;
+    }
+
+    // Merge subsequent messages of the same role
+    while (
+      tempMessages.length > 0 &&
+      tempMessages[0].role === currentMessage.role
+    ) {
+      const nextMessage = tempMessages.shift()!;
+      currentMessage.content += `\n\n${nextMessage.content}`;
+      currentMessage.timestamp = nextMessage.timestamp; // Take the latest timestamp
+    }
+    mergedMessages.push(currentMessage);
+  }
+
+  return mergedMessages;
+}
 
 const estimateTokens = (text: string): number => {
   // A simple approximation: 1 token ~ 4 characters
   return Math.ceil((text || '').length / 4);
 };
+
+/**
+ * A safe, simple stemmer for English words. It is not perfect but is designed to be
+ * non-destructive and handle common cases like plurals and simple verb tenses.
+ * @param word The word to stem.
+ * @returns The stemmed word.
+ */
+const stem = (word: string): string => {
+  if (word.length < 4) return word;
+
+  // Rule for plurals: cats -> cat, boxes -> box
+  if (word.endsWith('es') && word.length > 4) return word.slice(0, -2);
+  if (word.endsWith('s') && !word.endsWith('ss') && !word.endsWith('us'))
+    return word.slice(0, -1);
+
+  // Rule for verbs: walking -> walk, walked -> walk
+  // Check length to avoid over-stripping (e.g., "cared" -> "car")
+  if (word.endsWith('ing') && word.length > 5) return word.slice(0, -3);
+  if (word.endsWith('ed') && word.length > 5) return word.slice(0, -2);
+
+  return word;
+};
+
+/**
+ * Builds or retrieves a cached search index for a world's entries.
+ * The index is used for fast keyword matching in RAG.
+ * @param world The world object.
+ * @returns A pre-computed index for the world.
+ */
+function getOrBuildWorldIndex(world: World) {
+  // Use a JSON string of entries as a cheap but effective cache invalidation key.
+  const entriesJSON = JSON.stringify(world.entries);
+  const cached = worldIndexCache.get(world.id);
+
+  if (cached && cached.entriesJSON === entriesJSON) {
+    logger.log('Using cached world index.', { worldId: world.id });
+    return cached.index;
+  }
+
+  logger.log('Building new world index.', { worldId: world.id });
+
+  const entryIdToEntryMap = new Map<string, WorldEntry>();
+  const plainKeywordMap = new Map<string, WorldEntry[]>();
+  const stemmedKeywordMap = new Map<string, WorldEntry[]>();
+  const regexKeywords: { regex: RegExp; entries: WorldEntry[] }[] = [];
+  const allEnabledEntries = world.entries.filter((e) => e.enabled);
+
+  for (const entry of allEnabledEntries) {
+    entryIdToEntryMap.set(entry.id, entry);
+    if (entry.keys) {
+      for (const key of entry.keys) {
+        const lowerKey = key.trim().toLowerCase();
+        if (lowerKey.length < 2) continue;
+
+        if (/[*+?()|[\]{}^$\\]/.test(lowerKey)) {
+          try {
+            const regex = new RegExp(`\\b(${lowerKey})\\b`, 'gi');
+            regexKeywords.push({ regex, entries: [entry] });
+          } catch (e) {
+            if (!plainKeywordMap.has(lowerKey))
+              plainKeywordMap.set(lowerKey, []);
+            plainKeywordMap.get(lowerKey)!.push(entry);
+          }
+        } else {
+          if (!plainKeywordMap.has(lowerKey))
+            plainKeywordMap.set(lowerKey, []);
+          plainKeywordMap.get(lowerKey)!.push(entry);
+
+          const stemmedKey = stem(lowerKey);
+          if (stemmedKey !== lowerKey) {
+            if (!stemmedKeywordMap.has(stemmedKey))
+              stemmedKeywordMap.set(stemmedKey, []);
+            stemmedKeywordMap.get(stemmedKey)!.push(entry);
+          }
+        }
+      }
+    }
+  }
+
+  const index = {
+    plainKeywordMap,
+    stemmedKeywordMap,
+    regexKeywords,
+    stem,
+    entryIdToEntryMap,
+  };
+  worldIndexCache.set(world.id, { index, entriesJSON });
+  return index;
+}
 
 interface CompletionParams {
   provider: LLMProvider;
@@ -20,10 +162,12 @@ interface CompletionParams {
   temperature: number;
   prefill?: string;
   signal?: AbortSignal;
-  thinkingEnabled?: boolean;
   contextSize: number;
   maxOutputTokens: number;
   memorySummary?: string;
+  characterName?: string; // For single chat
+  activeCharacterNames?: string[]; // For group chat
+  interactionData?: Record<string, { viewCount: number; lastViewed: number }>;
 }
 
 export interface GeneratedCharacterProfile {
@@ -65,8 +209,7 @@ export async function summarizeMessages({
 
   try {
     if (provider === LLMProvider.GEMINI) {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
+      const response = await geminiAI.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: { systemInstruction: systemPrompt },
@@ -157,8 +300,7 @@ Respond ONLY with a valid JSON object matching the provided schema.`;
 
   try {
     if (provider === LLMProvider.GEMINI) {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
+      const response = await geminiAI.models.generateContent({
         model: model,
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
@@ -288,7 +430,10 @@ async function* parseOpenAIStream(
             yield content;
           }
         } catch (e) {
-          logger.error('Error parsing stream JSON chunk', { jsonStr, error: e });
+          logger.error('Error parsing stream JSON chunk', {
+            jsonStr,
+            error: e,
+          });
         }
       }
     }
@@ -296,7 +441,6 @@ async function* parseOpenAIStream(
 }
 
 async function* getGeminiCompletionStream(
-  apiKey: string,
   messages: Message[],
   model: string,
   temperature: number,
@@ -304,8 +448,6 @@ async function* getGeminiCompletionStream(
   prefill?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
   const systemPrompt = messages.find((m) => m.role === 'system')?.content || '';
   const chatMessages = messages.filter((m) => m.role !== 'system');
 
@@ -323,7 +465,6 @@ async function* getGeminiCompletionStream(
     temperature: number;
     systemInstruction: string;
     maxOutputTokens?: number;
-    thinkingConfig?: { thinkingBudget: number };
   } = {
     temperature: temperature,
     systemInstruction: systemPrompt,
@@ -331,15 +472,9 @@ async function* getGeminiCompletionStream(
 
   if (maxOutputTokens > 0) {
     geminiConfig.maxOutputTokens = maxOutputTokens;
-    // Per Gemini docs, a thinkingBudget must be set if maxOutputTokens is set for flash models
-    if (model.includes('flash')) {
-      // Reserve a small portion for thinking to prevent empty responses.
-      const budget = Math.min(100, Math.floor(maxOutputTokens / 4));
-      geminiConfig.thinkingConfig = { thinkingBudget: budget };
-    }
   }
 
-  const responseStream = await ai.models.generateContentStream({
+  const responseStream = await geminiAI.models.generateContentStream({
     model: model,
     contents: contents,
     config: geminiConfig,
@@ -434,139 +569,207 @@ async function* getOpenAICompatibleCompletionStream(
   yield* parseOpenAIStream(response.body, signal);
 }
 
-export async function* getChatCompletionStream({
-  provider,
-  apiKey,
-  model,
-  messages,
-  characterPersona,
-  userPersona,
-  globalSystemPrompt,
-  world,
-  temperature,
-  prefill,
-  signal,
-  thinkingEnabled,
-  contextSize,
-  maxOutputTokens,
-  memorySummary,
-}: CompletionParams): AsyncGenerator<string> {
+export async function* getChatCompletionStream(
+  params: CompletionParams,
+): AsyncGenerator<string> {
+  const {
+    provider,
+    apiKey,
+    model,
+    messages,
+    characterPersona,
+    userPersona,
+    globalSystemPrompt,
+    world,
+    temperature,
+    prefill,
+    signal,
+    contextSize,
+    maxOutputTokens,
+    memorySummary,
+    characterName,
+    activeCharacterNames,
+    interactionData,
+  } = params;
+
   if (!model?.trim()) {
     throw new Error(
       `Model name for ${provider} is not configured. Please set it in API Settings.`,
     );
   }
 
-  let finalSystemPrompt = globalSystemPrompt;
+  const promptParts: string[] = [];
+
+  promptParts.push('### CORE INSTRUCTIONS & GUIDELINES ###');
+  promptParts.push(globalSystemPrompt);
 
   if (userPersona) {
-    finalSystemPrompt += `\n\nYOU ARE ROLEPLAYING WITH THE FOLLOWING PERSONA:\nName: ${userPersona.name}\nDescription: ${userPersona.description}`;
+    promptParts.push('### USER PERSONA ###');
+    promptParts.push(
+      'This is the persona of the user you are roleplaying with. Keep their details in mind for your responses.',
+    );
+    promptParts.push(`- **Name:** ${userPersona.name}`);
+    promptParts.push(`- **Description:** ${userPersona.description}`);
   }
 
   if (memorySummary) {
-    finalSystemPrompt += `\n\nLONG-TERM MEMORY SUMMARY:\nThis is a summary of the conversation so far. Use it to maintain context and continuity.\n---\n${memorySummary}\n---`;
+    promptParts.push('### CONVERSATION SUMMARY ###');
+    promptParts.push(
+      'This is a summary of the conversation so far. Use it to maintain context and continuity.',
+    );
+    promptParts.push(`---\n${memorySummary}\n---`);
   }
 
-  // --- Optimized World Lore Retrieval (RAG v3) ---
+  // --- Smart World Lore Retrieval (RAG v5) ---
   const MAX_LORE_ENTRIES = 7;
-  let worldEntries: WorldEntry[] = [];
 
-  // Backward compatibility for old world format
-  if (world) {
-    if (world.entries && world.entries.length > 0) {
-      worldEntries = world.entries;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } else if ((world as any).content) {
-      worldEntries = [
-        {
-          id: 'legacy-content',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content: (world as any).content,
-          keys: [world.name.toLowerCase(), 'general'],
-          enabled: true,
-          isAlwaysActive: true,
-        },
-      ];
-    }
-  }
-
-  if (worldEntries.length > 0) {
-    const allEnabledEntries = worldEntries.filter((e) => e.enabled);
+  if (world?.entries && world.entries.length > 0) {
+    const allEnabledEntries = world.entries.filter((e) => e.enabled);
     if (allEnabledEntries.length > 0) {
-      // Step 1: Pre-process entries into efficient lookup structures
-      const keywordToEntryMap = new Map<string, WorldEntry[]>();
-      const entryIdToEntryMap = new Map<string, WorldEntry>();
+      // 1. Build advanced keyword index by retrieving from cache or computing.
+      const worldIndex = getOrBuildWorldIndex(world);
+      const { entryIdToEntryMap } = worldIndex;
 
-      for (const entry of allEnabledEntries) {
-        entryIdToEntryMap.set(entry.id, entry);
-        if (entry.keys) {
-          for (const key of entry.keys) {
-            const normalizedKey = key.trim().toLowerCase();
-            if (normalizedKey.length > 1) {
-              // Ignore very short keys
-              if (!keywordToEntryMap.has(normalizedKey)) {
-                keywordToEntryMap.set(normalizedKey, []);
-              }
-              keywordToEntryMap.get(normalizedKey)!.push(entry);
+      // Helper to find all types of keyword matches in a text
+      const findMatchesInText = (text: string) => {
+        const localMatches = new Map<
+          string,
+          { entry: WorldEntry; count: number; reasons: Set<string> }
+        >();
+        const addLocalMatch = (entry: WorldEntry, reason: string) => {
+          if (!localMatches.has(entry.id))
+            localMatches.set(entry.id, { entry, count: 0, reasons: new Set() });
+          const match = localMatches.get(entry.id)!;
+          match.count++;
+          match.reasons.add(reason);
+        };
+
+        if (!text) return localMatches;
+        const lowerText = text.toLowerCase();
+
+        // Regex matches
+        worldIndex.regexKeywords.forEach(
+          ({ regex, entries }: { regex: RegExp; entries: WorldEntry[] }) => {
+            const matches = lowerText.match(regex);
+            if (matches) {
+              entries.forEach((entry) => {
+                for (let i = 0; i < matches.length; i++)
+                  addLocalMatch(
+                    entry,
+                    `Regex: "${regex.source.replace(/\\b/g, '')}"`,
+                  );
+              });
             }
+          },
+        );
+
+        // Token-based matches (exact, stemmed)
+        const words = lowerText.match(/\b[\w'-]+\b/g) || [];
+        for (const word of new Set(words)) {
+          if (worldIndex.plainKeywordMap.has(word)) {
+            worldIndex.plainKeywordMap
+              .get(word)!
+              .forEach((entry: WorldEntry) =>
+                addLocalMatch(entry, `Exact: "${word}"`),
+              );
+          }
+          const stemmedWord = worldIndex.stem(word);
+          if (worldIndex.stemmedKeywordMap.has(stemmedWord)) {
+            worldIndex.stemmedKeywordMap
+              .get(stemmedWord)!
+              .forEach((entry: WorldEntry) => {
+                const plainKeys = (entry.keys || []).map((k) =>
+                  k.toLowerCase().trim(),
+                );
+                if (!plainKeys.includes(word))
+                  addLocalMatch(
+                    entry,
+                    `Stem: "${word}" -> "${stemmedWord}"`,
+                  );
+              });
           }
         }
-      }
+        return localMatches;
+      };
 
-      // Step 2: Build candidate list with scores
       const candidateScores = new Map<
         string,
         { score: number; reasons: Set<string> }
       >();
       const addScore = (entry: WorldEntry, score: number, reason: string) => {
-        if (!candidateScores.has(entry.id)) {
+        if (!candidateScores.has(entry.id))
           candidateScores.set(entry.id, { score: 0, reasons: new Set() });
-        }
         const current = candidateScores.get(entry.id)!;
         current.score += score;
         current.reasons.add(reason);
       };
 
-      // Add always-active entries with a high base score
+      // 2. Base scores: Always-active and user feedback
       for (const entry of allEnabledEntries) {
-        if (entry.isAlwaysActive) {
-          addScore(entry, 100, 'Always Active');
+        if (entry.isAlwaysActive) addScore(entry, 100, 'Always Active');
+        if (interactionData && interactionData[entry.id]) {
+          const interactionScore = Math.round(
+            Math.log1p(interactionData[entry.id].viewCount) * 15,
+          );
+          if (interactionScore > 0)
+            addScore(
+              entry,
+              interactionScore,
+              `User Interaction (${interactionData[entry.id].viewCount} views)`,
+            );
         }
       }
 
-      // Step 3: Scan context for keywords
-      const searchContext = (text: string, score: number, type: string) => {
-        if (!text) return;
-        const lowerText = text.toLowerCase();
-        for (const [key, entries] of keywordToEntryMap.entries()) {
-          try {
-            const regex = new RegExp(
-              `\\b${key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`,
-              'g',
-            );
-            if (lowerText.match(regex)) {
-              for (const entry of entries) {
-                addScore(entry, score, `${type}: "${key}"`);
-              }
-            }
-          } catch (e) {
-            // Ignore invalid regex from user input keys
+      // 3. Character relationship scores
+      const allActiveChars = [
+        characterName,
+        ...(activeCharacterNames || []),
+      ].filter(Boolean) as string[];
+      if (allActiveChars.length > 0) {
+        for (const charName of allActiveChars) {
+          const lowerCharName = charName.toLowerCase();
+          if (worldIndex.plainKeywordMap.has(lowerCharName)) {
+            worldIndex.plainKeywordMap
+              .get(lowerCharName)!
+              .forEach((entry: WorldEntry) => {
+                addScore(
+                  entry,
+                  50,
+                  `Linked to active character: "${charName}"`,
+                );
+              });
           }
+        }
+      }
+
+      // 4. Contextual search with smart matching
+      const searchContext = (text: string, baseScore: number, type: string) => {
+        const matches = findMatchesInText(text);
+        for (const matchData of matches.values()) {
+          const frequencyBonus = Math.pow(matchData.count, 1.2);
+          const finalScore = baseScore * frequencyBonus;
+          const reasonSummary = Array.from(matchData.reasons)
+            .slice(0, 2)
+            .join(', ');
+          addScore(
+            matchData.entry,
+            finalScore,
+            `${type}: ${reasonSummary} (x${matchData.count})`,
+          );
         }
       };
 
-      const recentMessagesContent = messages
-        .slice(-4)
-        .map((m) => m.content)
-        .join(' \n ');
-      const userPersonaContent = userPersona?.description || '';
-      const characterPersonaContent = characterPersona;
+      const recentMessages = messages.slice(-5);
+      recentMessages.forEach((message, i) => {
+        const recency = recentMessages.length - 1 - i;
+        const recencyScore = Math.max(2, 12 - recency * 2);
+        searchContext(message.content, recencyScore, `Message (t-${recency})`);
+      });
 
-      searchContext(recentMessagesContent, 10, 'Message');
-      searchContext(userPersonaContent, 5, 'User Persona');
-      searchContext(characterPersonaContent, 3, 'Character Persona');
+      searchContext(userPersona?.description, 5, 'User Persona');
+      searchContext(characterPersona, 3, 'Character Persona');
 
-      // Step 4: Rank and select top entries
+      // 5. Rank and select top entries
       if (candidateScores.size > 0) {
         const rankedCandidates = Array.from(candidateScores.entries())
           .map(([id, data]) => ({
@@ -576,69 +779,43 @@ export async function* getChatCompletionStream({
           .sort((a, b) => b.score - a.score)
           .slice(0, MAX_LORE_ENTRIES);
 
-        const finalEntries = rankedCandidates.map((c) => c.entry);
-        const lorebookPreamble = `\n\nALWAYS CONSULT THE FOLLOWING RELEVANT LOREBOOK ENTRIES FOR CONTEXT AND CONSISTENCY:\n`;
-        const lorebookContent = finalEntries
-          .map(
-            (entry) =>
-              `--- Entry (Keywords: ${(entry.keys || []).join(
-                ', ',
-              )}) ---\n${entry.content}`,
-          )
-          .join('\n\n');
-        finalSystemPrompt += `${lorebookPreamble}${lorebookContent}`;
+        if (rankedCandidates.length > 0) {
+          const finalEntries = rankedCandidates.map((c) => c.entry);
+          promptParts.push('### RELEVANT WORLD LORE ###');
+          promptParts.push(
+            'The following lore entries are relevant to the current scene. You MUST consult them for context and consistency.',
+          );
+          const lorebookContent = finalEntries
+            .map(
+              (entry) =>
+                `--- Entry: ${entry.name || 'Untitled'} (Keywords: ${(
+                  entry.keys || []
+                ).join(', ')}) ---\n${entry.content}`,
+            )
+            .join('\n\n');
+          promptParts.push(lorebookContent);
 
-        logger.log('Injected ranked lore entries', {
-          count: finalEntries.length,
-          world: world?.name,
-          entries: rankedCandidates.map((c) => ({
-            name: c.entry.name,
-            score: c.score,
-            reasons: Array.from(c.reasons),
-          })),
-        });
+          logger.log('Injected ranked lore entries', {
+            count: finalEntries.length,
+            world: world?.name,
+            entries: rankedCandidates.map((c) => ({
+              name: c.entry.name,
+              score: Math.round(c.score),
+              reasons: Array.from(c.reasons),
+            })),
+          });
+        }
       }
     }
   }
 
-  finalSystemPrompt += `\n\nYOUR ROLE IN THIS SCENE:\n${characterPersona}`;
+  promptParts.push('### YOUR CHARACTER ###');
+  promptParts.push(
+    `This is your character's persona for this scene. You must fully embody this character.`,
+  );
+  promptParts.push(characterPersona);
 
-  if (thinkingEnabled) {
-    finalSystemPrompt += `\n\n[MANDATORY] POST-RESPONSE ANALYSIS:
-Your response MUST be followed by a structured thinking process.
-1. Complete your entire roleplay response as the character.
-2. Immediately after your response, on a new line, add the exact separator: \`<|THINKING|>\`
-3. After the separator, provide your analysis using this exact format:
-
-1. CHARACTER & EMOTION
-   ├─ Who am I? What's my current emotional state?
-   └─ What does my character want in this moment?
-
-2. SCENE CONTEXT
-   ├─ What just happened? (last 1-2 messages)
-   └─ Where are we? What's the mood?
-
-3. RESPONSE APPROACH
-   ├─ How would my character react? (personality-driven)
-   └─ Show emotions through actions/body language
-   └─ What's the subtext? (what they're NOT saying)
-
-4. BUILD THE RESPONSE
-   ├─ Internal reaction or action first
-   ├─ Dialogue with emotion
-   └─ End with a hook (question/action/tension)
-
-5. FORMATTING
-   ├─ *Asterisks* for actions, thoughts, narration, body language
-   └─ "Quotation marks" for spoken dialogue
-   └─ Combine them naturally in flow
-
-6. VALIDATION
-   ├─ Stays in character?
-   └─ Gives the other player something to respond to?
-
-This entire section is non-negotiable and MUST be included if this instruction is present.`;
-  }
+  const finalSystemPrompt = promptParts.join('\n\n');
 
   // Token Management - Truncate messages to fit context window
   const availableTokensForHistory = contextSize;
@@ -663,6 +840,9 @@ This entire section is non-negotiable and MUST be included if this instruction i
     usedTokens += messageTokens;
   }
 
+  // Merge consecutive messages to prevent API errors from non-alternating roles
+  const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
+
   const systemMessage: Message = {
     id: 'system-prompt-message',
     role: 'system',
@@ -671,13 +851,12 @@ This entire section is non-negotiable and MUST be included if this instruction i
 
   const apiMessages = [
     systemMessage,
-    ...truncatedMessages.filter((m) => m.role !== 'system'),
+    ...mergedHistory.filter((m) => m.role !== 'system'),
   ];
 
   // Now call the appropriate stream generator based on provider.
   if (provider === LLMProvider.GEMINI) {
     yield* getGeminiCompletionStream(
-      apiKey,
       apiMessages,
       model,
       temperature,
@@ -702,5 +881,198 @@ This entire section is non-negotiable and MUST be included if this instruction i
   } else {
     logger.error(`Unsupported provider in getChatCompletionStream: ${provider}`);
     throw new Error(`Unsupported provider: ${provider}`);
+  }
+}
+
+interface GroupCompletionParams
+  extends Omit<
+    CompletionParams,
+    'characterPersona' | 'characterName' | 'prefill'
+  > {
+  scenario: string;
+  sessionCharacters: { name: string; persona: string }[];
+}
+
+export async function getGroupChatCompletion(
+  params: GroupCompletionParams,
+): Promise<GroupTurnAction[]> {
+  const {
+    provider,
+    apiKey,
+    model,
+    messages: allMessages,
+    userPersona,
+    globalSystemPrompt,
+    world,
+    temperature,
+    contextSize,
+    maxOutputTokens,
+    memorySummary,
+    sessionCharacters,
+    scenario,
+    interactionData,
+  } = params;
+
+  if (!model?.trim()) {
+    throw new Error(
+      `Model name for ${provider} is not configured. Please set it in API Settings.`,
+    );
+  }
+
+  const promptParts: string[] = [];
+
+  promptParts.push('### CORE INSTRUCTIONS: GROUP SCENE DIRECTOR ###');
+  promptParts.push(
+    `You are a master storyteller and scene director for a multi-character roleplay. Your task is to advance the scene based on the latest user message and the established context. You must direct the characters, deciding who speaks or acts. You can have one or multiple characters act in a single turn. You can also include narrative descriptions.`,
+  );
+
+  promptParts.push('### SCENE DETAILS ###');
+  promptParts.push(`**Scenario:** ${scenario}`);
+  promptParts.push(
+    `**Characters in Scene:**\n${sessionCharacters
+      .map((c) => `- ${c.name}`)
+      .join('\n')}`,
+  );
+
+  promptParts.push('### ROLEPLAY GUIDELINES ###');
+  promptParts.push(globalSystemPrompt);
+
+  if (userPersona) {
+    promptParts.push('### USER PERSONA ###');
+    promptParts.push('This is the persona of the user you are roleplaying with.');
+    promptParts.push(`- **Name:** ${userPersona.name}`);
+    promptParts.push(`- **Description:** ${userPersona.description}`);
+  }
+
+  if (memorySummary) {
+    promptParts.push('### CONVERSATION SUMMARY ###');
+    promptParts.push('This is a summary of the conversation so far.');
+    promptParts.push(`---\n${memorySummary}\n---`);
+  }
+
+  // Simplified RAG for group chat (could be expanded)
+  if (world?.entries) {
+    const activeEntries = world.entries.filter(
+      (e) => e.enabled && e.isAlwaysActive,
+    );
+    if (activeEntries.length > 0) {
+      promptParts.push('### RELEVANT WORLD LORE ###');
+      promptParts.push(
+        'The following lore entries are relevant. You MUST consult them for context and consistency.',
+      );
+      promptParts.push(
+        activeEntries.map((e) => e.content).join('\n---\n'),
+      );
+    }
+  }
+
+  promptParts.push('### FULL CHARACTER PERSONAS ###');
+  promptParts.push(
+    'This is a reference for all characters in the scene. Use it to ensure their actions and dialogue are in-character.',
+  );
+  promptParts.push(
+    sessionCharacters
+      .map((c) => `--- ${c.name} ---\n${c.persona}\n---`)
+      .join('\n\n'),
+  );
+
+  const finalSystemPrompt = promptParts.join('\n\n');
+
+  // Token Management
+  const availableTokensForHistory = contextSize;
+  const truncatedMessages: Message[] = [];
+  let usedTokens = 0;
+  for (let i = allMessages.length - 1; i >= 0; i--) {
+    const message = allMessages[i];
+    const messageTokens = estimateTokens(message.content);
+    if (usedTokens + messageTokens > availableTokensForHistory) break;
+    truncatedMessages.unshift(message);
+    usedTokens += messageTokens;
+  }
+  const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
+
+  if (provider === LLMProvider.GEMINI) {
+    const geminiPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nBased on the conversation history, generate the next turn in the scene as an array of actions.
+- For a character's turn, use their exact name for "characterName".
+- For narrative descriptions of the scene, use the special name "Narrator" for "characterName".
+- "content" should be a string containing the dialogue and/or actions, following standard roleplay format (e.g., *He looks around.* "What was that?").`;
+
+    const response = await geminiAI.models.generateContent({
+      model,
+      contents: [
+        ...mergedHistory.map((msg) => ({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        })),
+      ],
+      config: {
+        systemInstruction: geminiPrompt,
+        temperature,
+        maxOutputTokens,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              characterName: { type: Type.STRING },
+              content: { type: Type.STRING },
+            },
+            required: ['characterName', 'content'],
+          },
+        },
+      },
+    });
+    const jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as GroupTurnAction[];
+  } else {
+    // OpenAI-compatible
+    const openAIPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nYOUR RESPONSE MUST BE A VALID JSON OBJECT with a single key "turn".
+The value of "turn" must be an array of action objects.
+Each object in the array represents a single character's action or dialogue, or a narrative description.
+
+The JSON schema for each object is: { "characterName": string, "content": string }
+- For a character's turn, "characterName" MUST be their exact name from the character list.
+- For narrative descriptions of the scene, use the special name "Narrator" for "characterName".
+- "content" should be a string containing the dialogue and/or actions, following standard roleplay format (e.g., *He looks around.* "What was that?").
+
+Based on the conversation history, generate the next turn in the scene.`;
+
+    const body = {
+      model,
+      messages: [
+        { role: 'system', content: openAIPrompt },
+        ...mergedHistory.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      ],
+      temperature,
+      max_tokens: maxOutputTokens,
+      response_format: { type: 'json_object' },
+    };
+
+    const response = await fetch(API_ENDPOINTS[provider], {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `API request failed with status ${response.status}: ${errorBody}`,
+      );
+    }
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
+    if (!content) throw new Error('Invalid response format from API.');
+    const parsed = JSON.parse(content);
+    if (!parsed.turn || !Array.isArray(parsed.turn))
+      throw new Error('API did not return a `turn` array.');
+    return parsed.turn as GroupTurnAction[];
   }
 }

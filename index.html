@@ -19,61 +19,50 @@
             },
             colors: {
               slate: {
-                950: '#060810',
-                900: '#0F121E',
-                800: '#1A2033',
-                700: '#343E58',
-                600: '#4D5A7A',
-                500: '#7C89A9',
-                400: '#96A3C2',
-                300: '#C2CDE2',
-                200: '#E1E7F2',
-                100: '#F0F3F9',
+                950: '#020305', // Obsidian Black
+                900: '#0A0B0F',
+                800: '#181A23',
+                700: '#2C2F3D',
+                600: '#484C5E',
+                500: '#676D81',
+                400: '#9096A8',
+                300: '#C1C6D4',
+                200: '#E0E3E9',
+                100: '#F1F2F5',
               },
-              sky: {
-                ...tailwind.theme.colors.sky,
-                400: '#38bdf8', // Light blue for glows
-                500: '#0ea5e9', // Main interactive blue
-                600: '#0284c7', // Darker interactive blue
+              crimson: {
+                200: '#fecaca',
+                300: '#fca5a5',
+                400: '#f87171',
+                500: '#ef4444',
+                600: '#dc2626',
+                700: '#b91c1c',
+                800: '#991b1b',
+                900: '#7f1d1d',
               },
-              fuchsia: {
-                ...tailwind.theme.colors.fuchsia,
-                500: '#d946ef',
-                600: '#c026d3',
-              },
-              indigo: {
-                500: '#6366f1',
-                600: '#4f46e5',
+              ember: {
+                300: '#fdba74',
+                400: '#fb923c',
+                500: '#f97316',
+                600: '#ea580c',
+                700: '#c2410c',
+                800: '#9a3412',
+                900: '#7c2d12',
               }
             },
             keyframes: {
-              'fade-in': {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              'slide-up': {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
               'message-in': {
                 '0%': { transform: 'translateY(20px) scale(0.98)', opacity: '0' },
                 '100%': { transform: 'translateY(0) scale(1)', opacity: '1' },
               },
               'pulse-glow': {
-                '0%, 100%': { boxShadow: '0 0 12px 2px rgba(2, 132, 199, 0.4)' }, /* sky-600 */
-                '50%': { boxShadow: '0 0 20px 5px rgba(2, 132, 199, 0.2)' },
+                '0%, 100%': { boxShadow: '0 0 12px 2px rgba(220, 38, 38, 0.4)' }, /* crimson-600 */
+                '50%': { boxShadow: '0 0 20px 5px rgba(220, 38, 38, 0.2)' },
               },
-               'hex-bg-pan': {
-                '0%': { background-position: '0% 0%' },
-                '100%': { background-position: '100% 100%' },
-              }
             },
             animation: {
-              'fade-in': 'fade-in 0.3s ease-out forwards',
-              'slide-up': 'slide-up 0.4s ease-out forwards',
               'message-in': 'message-in 0.4s ease-out forwards',
               'pulse-glow': 'pulse-glow 3s infinite ease-in-out',
-              'hex-bg-pan': 'hex-bg-pan 120s linear infinite',
             }
           }
         }
@@ -84,8 +73,8 @@
         overflow: hidden; /* Prevent page-level scrollbars */
       }
       ::selection {
-        background-color: #c026d3; /* fuchsia-600 */
-        color: #F0F3F9; /* slate-100 */
+        background-color: #b91c1c; /* crimson-700 */
+        color: #F1F2F5; /* slate-100 */
       }
       /* Custom scrollbar to match gaming theme */
       .custom-scrollbar::-webkit-scrollbar {
@@ -93,30 +82,21 @@
         height: 8px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
-        background: #0F121E; /* slate-900 */
+        background: #0A0B0F; /* slate-900 */
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background-color: #343E58; /* slate-700 */
+        background-color: #2C2F3D; /* slate-700 */
         border-radius: 4px;
-        border: 2px solid #0F121E;
+        border: 2px solid #0A0B0F;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: #4D5A7A; /* slate-600 */
-      }
-
-      /* Gaming Theme Background */
-      .bg-gaming-pattern {
-        background-color: #060810;
-        background-image:
-          radial-gradient(circle at center, rgba(14, 165, 233, 0.08) 0%, transparent 40%),
-          url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><g fill="%230F121E"><path d="M0 0h80v80H0z" fill-opacity="1"/><path d="M20 20h20v20H20zM60 20h20v20H60zM20 60h20v20H20zM60 60h20v20H60z" fill-opacity="0.5"/><path d="M10 10h10v10H10zM50 10h10v10H50zM10 50h10v10H10zM50 50h10v10H50z" fill-opacity="0.3"/></g></svg>');
-        animation: hex-bg-pan 120s linear infinite;
+        background-color: #484C5E; /* slate-600 */
       }
 
       /* Card glow effect */
       .card-glow {
         position: relative;
-        border: 1px solid #1A2033;
+        border: 1px solid #181A23;
       }
       .card-glow:before {
         content: '';
@@ -124,7 +104,7 @@
         inset: 0;
         border-radius: inherit;
         padding: 1px; /* border width */
-        background: radial-gradient(300px at var(--x) var(--y), rgba(14, 165, 233, 0.3), transparent 80%);
+        background: radial-gradient(300px at var(--x) var(--y), rgba(220, 38, 38, 0.3), transparent 80%);
         -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         -webkit-mask-composite: xor;
         mask-composite: exclude;
@@ -150,7 +130,7 @@
         height: 0;
         border-top: 8px solid transparent;
         border-bottom: 8px solid transparent;
-        border-right: 8px solid #1A2033; /* slate-800 */
+        border-right: 8px solid #181A23; /* slate-800 */
       }
 
       .chat-bubble-right::after {
@@ -162,7 +142,7 @@
         height: 0;
         border-top: 8px solid transparent;
         border-bottom: 8px solid transparent;
-        border-left: 8px solid #343E58; /* slate-700 */
+        border-left: 8px solid #2C2F3D; /* slate-700 */
       }
       
     </style>
@@ -175,7 +155,9 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
     "zustand": "https://aistudiocdn.com/zustand@^4.5.4",
     "zustand/middleware": "https://aistudiocdn.com/zustand@^4.5.4/middleware.js",
-    "zustand/": "https://aistudiocdn.com/zustand@^5.0.8/"
+    "zustand/": "https://aistudiocdn.com/zustand@^5.0.8/",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^11.3.19",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.417.0"
   }
 }
 </script>

@@ -29,9 +29,10 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
   };
 
   const isValid = selectedIds.size >= 2 && scenario.trim().length > 0;
+  const selectableCharacters = characters.filter((char) => !char.isImmutable);
 
   return (
-    <div className="w-full h-screen bg-slate-950 flex flex-col">
+    <div className="w-full h-screen bg-transparent flex flex-col">
       <header className="p-4 flex items-center gap-4 border-b border-slate-800 shrink-0 bg-slate-950/70 backdrop-blur-sm sticky top-0 z-10">
         <button
           onClick={onBack}
@@ -50,7 +51,7 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
             1. SELECT CHARACTERS (2+)
           </h2>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {characters.map((char) => (
+            {selectableCharacters.map((char) => (
               <button
                 key={char.id}
                 onClick={() => handleToggleCharacter(char.id)}
@@ -60,7 +61,11 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
                     : 'ring-2 ring-transparent hover:ring-slate-600'
                 }`}
               >
-                <Avatar src={char.avatar} alt={char.name} className="w-full h-full" />
+                <Avatar
+                  src={char.avatar}
+                  alt={char.name}
+                  className="w-full h-full"
+                />
                 <div
                   className={`absolute inset-0 bg-gradient-to-t from-black/80 to-transparent transition-opacity ${
                     selectedIds.has(char.id)

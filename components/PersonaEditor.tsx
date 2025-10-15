@@ -3,6 +3,7 @@ import { Persona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
+import { motion } from 'framer-motion';
 
 interface PersonaEditorProps {
   persona: Persona;
@@ -46,12 +47,20 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div
-        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 animate-slide-up"
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 20, opacity: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
@@ -77,7 +86,7 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
                   src={formData.avatar}
                   alt="avatar"
                   shape="square"
-                  className="w-32 h-32 border-2 border-slate-700"
+                  className="w-32 h-48 border-2 border-slate-700"
                 />
                 <button
                   type="button"
@@ -101,14 +110,14 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
                   id="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-lg p-3 placeholder:text-slate-600"
+                  className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-lg p-3 placeholder:text-slate-600"
                   required
                 />
                 <div className="flex items-center gap-4 mt-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-sm text-sky-400 hover:underline"
+                    className="text-sm text-crimson-400 hover:underline"
                   >
                     Upload Image
                   </button>
@@ -116,7 +125,7 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
                     <button
                       type="button"
                       onClick={() => setFormData((p) => ({ ...p, avatar: '' }))}
-                      className="text-sm text-fuchsia-500 hover:underline"
+                      className="text-sm text-ember-500 hover:underline"
                     >
                       Remove Image
                     </button>
@@ -148,7 +157,7 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
                 value={formData.description}
                 onChange={handleChange}
                 rows={6}
-                className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
+                className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
                 placeholder="e.g., A witty space pirate with a heart of gold, searching for ancient relics. Speaks casually with a bit of swagger."
               />
             </div>
@@ -163,14 +172,14 @@ const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors border border-sky-400/50 shadow-md shadow-sky-900/50"
+              className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
             >
               Save Persona
             </button>
           </footer>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

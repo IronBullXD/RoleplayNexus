@@ -1,8 +1,8 @@
 import React from 'react';
 import { Icon } from './Icon';
+import { motion } from 'framer-motion';
 
 interface ConfirmationModalProps {
-  isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   title: string;
@@ -12,7 +12,6 @@ interface ConfirmationModalProps {
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
-  isOpen,
   onClose,
   onConfirm,
   title,
@@ -20,22 +19,28 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmButtonText = 'Confirm',
   confirmButtonVariant = 'primary',
 }) => {
-  if (!isOpen) return null;
-
   const confirmButtonClasses = {
     primary:
-      'bg-sky-600 hover:bg-sky-500 border-sky-400/50 shadow-sky-900/50',
+      'bg-crimson-600 hover:bg-crimson-500 border-crimson-400/50 shadow-crimson-900/50',
     danger:
-      'bg-fuchsia-600 hover:bg-fuchsia-500 border-fuchsia-400/50 shadow-fuchsia-900/50',
+      'bg-ember-600 hover:bg-ember-500 border-ember-400/50 shadow-ember-900/50',
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div
-        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-md m-4 border border-slate-700 animate-slide-up"
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 20, opacity: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-md m-4 border border-slate-700"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center">
@@ -72,8 +77,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             {confirmButtonText}
           </button>
         </footer>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -31,7 +31,9 @@ function formatRelativeTime(timestamp: number): string {
 
   if (diffDays === 1) return `Yesterday`;
   if (diffDays < 7)
-    return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+    return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
+      date,
+    );
 
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -51,61 +53,74 @@ type RecentSession = {
   timestamp: number;
 };
 
-const RecentChatCard: React.FC<{
+// FIX: Converted RecentChatCard to a React.FC with a defined props interface to resolve the 'key' prop error.
+interface RecentChatCardProps {
   session: RecentSession;
   onClick: () => void;
-}> = ({ session, onClick }) => (
-  <button
-    onClick={onClick}
-    className="w-full bg-slate-900 border border-slate-800 rounded-lg hover:border-sky-500/80 transition-all duration-300 group text-left p-3 flex items-center gap-3"
-  >
-    <div className="flex -space-x-3 shrink-0">
-      {session.avatars.slice(0, 3).map((avatar, index) => (
-        <Avatar
-          key={index}
-          src={avatar}
-          alt=""
-          shape="circle"
-          className="w-10 h-10 border-2 border-slate-900"
-        />
-      ))}
-    </div>
-    <div className="flex-1 min-w-0">
-      <div className="flex justify-between items-baseline gap-2">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h3 className="font-bold text-sm text-slate-100 group-hover:text-sky-300 transition-colors truncate">
-            {session.title}
-          </h3>
-          {session.type === 'group' && (
-            <span className="text-xs font-semibold text-indigo-300 bg-indigo-900/50 px-2 py-0.5 rounded-full shrink-0">
-              GROUP
-            </span>
-          )}
+}
+
+const RecentChatCard: React.FC<RecentChatCardProps> = ({
+  session,
+  onClick,
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full bg-slate-900 border border-slate-800 rounded-lg hover:border-crimson-500/80 transition-all duration-300 group text-left p-3 flex items-center gap-3"
+    >
+      <div className="flex -space-x-3 shrink-0">
+        {session.avatars.slice(0, 3).map((avatar, index) => (
+          <Avatar
+            key={index}
+            src={avatar}
+            alt=""
+            shape="circle"
+            className="w-10 h-10 border-2 border-slate-900"
+          />
+        ))}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-baseline gap-2">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h3 className="font-bold text-sm text-slate-100 group-hover:text-crimson-300 transition-colors truncate">
+              {session.title}
+            </h3>
+            {session.type === 'group' && (
+              <span className="text-xs font-semibold text-ember-300 bg-ember-900/50 px-2 py-0.5 rounded-full shrink-0">
+                GROUP
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 font-medium shrink-0">
+            {session.lastMessageDate}
+          </p>
         </div>
-        <p className="text-xs text-slate-500 font-medium shrink-0">
-          {session.lastMessageDate}
+        <p className="text-sm text-slate-400 line-clamp-1 mt-1">
+          <SimpleMarkdown text={session.lastMessage} />
         </p>
       </div>
-      <p className="text-sm text-slate-400 line-clamp-1 mt-1">
-        <SimpleMarkdown text={session.lastMessage} />
-      </p>
-    </div>
-  </button>
-);
+    </button>
+  );
+};
 
-const ViewAllHistoryCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    className="w-full h-full bg-slate-900/50 border border-dashed border-slate-700 rounded-lg hover:border-sky-700 hover:bg-sky-900/20 transition-all duration-300 group flex items-center justify-center text-slate-500 hover:text-sky-400"
-  >
-    <div className="flex items-center gap-3">
-      <Icon name="history" className="w-6 h-6 text-slate-600 group-hover:text-sky-400" />
-      <span className="font-semibold text-sm group-hover:text-sky-300">
-        View All History
-      </span>
-    </div>
-  </button>
-);
+function ViewAllHistoryCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full h-full bg-slate-900/50 border border-dashed border-slate-700 rounded-lg hover:border-crimson-700 hover:bg-crimson-900/20 transition-all duration-300 group flex items-center justify-center text-slate-500 hover:text-crimson-400"
+    >
+      <div className="flex items-center gap-3">
+        <Icon
+          name="history"
+          className="w-6 h-6 text-slate-600 group-hover:text-crimson-400"
+        />
+        <span className="font-semibold text-sm group-hover:text-crimson-300">
+          View All History
+        </span>
+      </div>
+    </button>
+  );
+}
 
 const CharacterCard: React.FC<{
   character: Character;
@@ -131,7 +146,8 @@ const CharacterCard: React.FC<{
     };
     cardRef.current?.addEventListener('mousemove', handleMouseMove);
     const currentCardRef = cardRef.current;
-    return () => currentCardRef?.removeEventListener('mousemove', handleMouseMove);
+    return () =>
+      currentCardRef?.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
   useEffect(() => {
@@ -216,7 +232,7 @@ const CharacterCard: React.FC<{
               </button>
               <button
                 onClick={() => handleMenuAction(onDelete)}
-                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-fuchsia-500 hover:bg-slate-700/50 transition-colors"
+                className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-ember-400 hover:bg-slate-700/50 transition-colors"
               >
                 <Icon name="delete" className="w-4 h-4" /> Delete
               </button>
@@ -228,23 +244,28 @@ const CharacterCard: React.FC<{
   );
 };
 
-const NewCharacterCard: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-sky-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-sky-600/10 hover:-translate-y-1 animate-pulse-glow"
-  >
-    <Icon name="add" className="w-10 h-10 text-slate-600 group-hover:text-sky-500 transition-colors" />
-    <p className="mt-2 font-semibold text-slate-500 group-hover:text-sky-400">
-      Create Character
-    </p>
-  </button>
-);
+function NewCharacterCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-crimson-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-crimson-600/10 hover:-translate-y-1 animate-pulse-glow"
+    >
+      <Icon
+        name="add"
+        className="w-10 h-10 text-slate-600 group-hover:text-crimson-500 transition-colors"
+      />
+      <p className="mt-2 font-semibold text-slate-500 group-hover:text-crimson-400">
+        Create Character
+      </p>
+    </button>
+  );
+}
 
 type SortOrder = 'last-played' | 'name-asc' | 'name-desc';
 
 const RECENT_CHAT_LIMIT = 5;
 
-const CharacterSelection: React.FC<CharacterSelectionProps> = ({
+function CharacterSelection({
   onNewCharacter,
   onEditCharacter,
   onNavigateToSettings,
@@ -253,7 +274,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onNavigateToWorlds,
   onNavigateToPersona,
   onNavigateToDebug,
-}) => {
+}: CharacterSelectionProps) {
   const {
     characters,
     conversations,
@@ -317,7 +338,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   };
 
   const { recentSessions, totalRecentCount } = useMemo(() => {
-    // FIX: Added explicit type `[string, ChatSession[]]` to destructuring assignment to correctly type `sessions`.
     const singleSessions = Object.entries(conversations).flatMap(
       ([charId, sessions]: [string, ChatSession[]]) => {
         const char = characters.find((c) => c.id === charId);
@@ -328,14 +348,14 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
               characterId: charId,
               title: char.name,
               avatars: [char.avatar],
-              lastMessage: s.messages[s.messages.length - 1]?.content || 'Chat started.',
+              lastMessage:
+                s.messages[s.messages.length - 1]?.content || 'Chat started.',
               timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
             }))
           : [];
       },
     );
 
-    // FIX: Added explicit type `GroupChatSession` to `s` to correctly type the iterated object.
     const groupSessions = Object.values(groupConversations).map(
       (s: GroupChatSession) => {
         const sessionChars = s.characterIds
@@ -347,7 +367,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           title: s.title,
           avatars: sessionChars.map((c) => c.avatar),
           lastMessage:
-            s.messages[s.messages.length - 1]?.content || 'Group chat started.',
+            s.messages[s.messages.length - 1]?.content ||
+            'Group chat started.',
           timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
         };
       },
@@ -371,7 +392,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
-    // FIX: Added explicit type `[string, ChatSession[]]` to destructuring assignment to correctly type `sessions`.
     Object.entries(conversations).forEach(
       ([charId, sessions]: [string, ChatSession[]]) => {
         let maxTimestamp = 0;
@@ -413,10 +433,10 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   }, [userCharacters, searchQuery, sortOrder, lastPlayedTimestamps]);
 
   return (
-    <div className="w-full h-screen bg-slate-950 flex flex-col">
+    <div className="w-full h-screen bg-transparent flex flex-col">
       <header className="p-4 flex justify-between items-center border-b border-slate-800 shrink-0 bg-slate-950/70 backdrop-blur-sm sticky top-0 z-20">
         <h1 className="text-2xl font-bold font-display tracking-widest uppercase">
-          Roleplay <span className="text-sky-400">Nexus</span>
+          Roleplay <span className="text-crimson-400">Nexus</span>
         </h1>
         <div className="flex items-center gap-2">
           <input
@@ -446,7 +466,11 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             icon="character"
             label="My Persona"
           />
-          <IconButton onClick={onNavigateToSettings} icon="sliders" label="Settings" />
+          <IconButton
+            onClick={onNavigateToSettings}
+            icon="sliders"
+            label="Settings"
+          />
           <IconButton
             onClick={onNavigateToDebug}
             icon="terminal"
@@ -506,13 +530,13 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
               <input
                 type="text"
                 placeholder="Search characters..."
-                className="w-full bg-slate-900 border-2 border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                className="w-full bg-slate-900 border-2 border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-crimson-500 focus:border-crimson-500 transition"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <select
-              className="bg-slate-900 border-2 border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition appearance-none"
+              className="bg-slate-900 border-2 border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-crimson-500 focus:border-crimson-500 transition appearance-none"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                 backgroundPosition: 'right 0.5rem center',
@@ -557,7 +581,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             </p>
             <button
               onClick={onNewCharacter}
-              className="flex items-center gap-2 px-5 py-3 mt-8 text-base font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-lg hover:shadow-sky-500/50 transition-all border border-sky-400/50"
+              className="flex items-center gap-2 px-5 py-3 mt-8 text-base font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg shadow-lg hover:shadow-crimson-500/50 transition-all border border-crimson-400/50"
             >
               <Icon name="add" className="w-5 h-5" /> Create Your First Character
             </button>
@@ -566,6 +590,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       </main>
     </div>
   );
-};
+}
 
 export default CharacterSelection;

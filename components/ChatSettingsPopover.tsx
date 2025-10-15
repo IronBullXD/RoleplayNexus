@@ -4,18 +4,16 @@ import { Icon } from './Icon';
 import { Tooltip } from './Tooltip';
 
 interface ChatSettingsPopoverProps {
-    settings: Pick<Settings, 'worldId' | 'temperature' | 'thinkingEnabled' | 'contextSize' | 'maxOutputTokens'> & { memoryEnabled: boolean };
+    settings: Pick<Settings, 'worldId' | 'temperature' | 'contextSize' | 'maxOutputTokens'> & { memoryEnabled: boolean };
     worlds: World[];
     onSetWorld: (worldId: string | null) => void;
     onSetTemperature: (temperature: number) => void;
-    onSetThinkingEnabled: (enabled: boolean) => void;
     onSetContextSize: (size: number) => void;
     onSetMaxOutputTokens: (tokens: number) => void;
     onSetMemoryEnabled: (enabled: boolean) => void;
-    onSetPromptAdherence: (adherence: 'default' | 'strict') => void;
 }
 
-const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, worlds, onSetWorld, onSetTemperature, onSetThinkingEnabled, onSetContextSize, onSetMaxOutputTokens, onSetMemoryEnabled, onSetPromptAdherence }) => {
+const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, worlds, onSetWorld, onSetTemperature, onSetContextSize, onSetMaxOutputTokens, onSetMemoryEnabled }) => {
     const [isOpen, setIsOpen] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +34,7 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                     type="button"
                     onClick={() => setIsOpen(p => !p)}
                     aria-expanded={isOpen}
-                    className="p-2 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 text-slate-300 bg-slate-800/50 hover:bg-slate-700/50"
+                    className="p-2 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-crimson-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 text-slate-300 bg-slate-800/50 hover:bg-slate-700/50"
                     aria-label="Chat Settings"
                 >
                     <Icon name="sliders" className="w-5 h-5" />
@@ -59,91 +57,83 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                         <select
                             value={settings.worldId || ''}
                             onChange={(e) => onSetWorld(e.target.value || null)}
-                            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-2"
+                            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-2"
                         >
-                            <option value="">None</option>
-                            {worlds.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            <option value="">(No World)</option>
+                            {worlds.map(world => (
+                                <option key={world.id} value={world.id}>{world.name}</option>
+                            ))}
                         </select>
                     </div>
-                    
-                    {/* Creativity */}
+
+                    {/* Temperature */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-300">Creativity</label>
+                        <label htmlFor="temperature" className="block text-sm font-medium text-slate-300">Temperature</label>
                         <p className="text-xs text-slate-500 mb-2">Controls randomness. Lower is more predictable.</p>
                         <div className="flex items-center gap-3">
                             <input
-                                type="range" min="0" max="2" step="0.1"
+                                type="range"
+                                id="temperature"
+                                min="0.1"
+                                max="1.5"
+                                step="0.05"
                                 value={settings.temperature}
-                                onChange={e => onSetTemperature(parseFloat(e.target.value))}
-                                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                                onChange={(e) => onSetTemperature(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer range-thumb"
                             />
-                            <span className="font-mono text-sm text-slate-300 bg-slate-950 border border-slate-700 px-2 py-1 rounded-md w-14 text-center">
-                                {settings.temperature.toFixed(1)}
-                            </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-slate-500 mt-1 px-1">
-                            <span>Precise</span>
-                            <span>Creative</span>
+                            <span className="text-sm font-mono text-slate-400 w-12 text-center">{settings.temperature.toFixed(2)}</span>
                         </div>
                     </div>
                     
-                    {/* Memory & Response Length */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300">Memory (Tokens)</label>
-                            <p className="text-xs text-slate-500 mb-2">How much the AI remembers from the conversation history.</p>
-                            <input
-                                key={`context-size-${settings.contextSize}`}
-                                type="number"
-                                defaultValue={settings.contextSize}
-                                onBlur={(e) => onSetContextSize(parseInt(e.target.value, 10) || 0)}
-                                className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-2 text-sm"
-                                min="0" step="512"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300">Response Length (Tokens)</label>
-                            <p className="text-xs text-slate-500 mb-2">The maximum length of the AI's reply.</p>
-                            <input
-                                key={`max-tokens-${settings.maxOutputTokens}`}
-                                type="number"
-                                defaultValue={settings.maxOutputTokens}
-                                onBlur={(e) => onSetMaxOutputTokens(parseInt(e.target.value, 10) || 0)}
-                                className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-2 text-sm"
-                                min="0" step="256"
-                            />
-                        </div>
+                    {/* Context Size */}
+                    <div>
+                        <label htmlFor="contextSize" className="block text-sm font-medium text-slate-300">Context Size (Tokens)</label>
+                         <p className="text-xs text-slate-500 mb-2">How much history the AI remembers.</p>
+                        <input
+                            type="number"
+                            id="contextSize"
+                            step="1024"
+                            value={settings.contextSize}
+                            onChange={(e) => onSetContextSize(parseInt(e.target.value, 10) || 0)}
+                            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-2"
+                        />
+                    </div>
+
+                    {/* Max Output Tokens */}
+                    <div>
+                        <label htmlFor="maxOutputTokens" className="block text-sm font-medium text-slate-300">Max Output Tokens</label>
+                         <p className="text-xs text-slate-500 mb-2">Max length of a single AI response.</p>
+                        <input
+                            type="number"
+                            id="maxOutputTokens"
+                            step="256"
+                            value={settings.maxOutputTokens}
+                            onChange={(e) => onSetMaxOutputTokens(parseInt(e.target.value, 10) || 0)}
+                            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-2"
+                        />
                     </div>
                     
-                    <hr className="!my-4 border-slate-800" />
-                    
-                    {/* Feature Toggles */}
-                     <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <Icon name="brain" className="w-6 h-6 text-slate-400 shrink-0" />
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300">Enable AI Thinking</label>
-                                    <p className="text-xs text-slate-500">Reveals the AI's thought process.</p>
-                                </div>
+                    {/* Memory */}
+                    <div>
+                        <label htmlFor="memoryEnabled" className="flex items-center justify-between cursor-pointer group/toggle p-2 rounded-md hover:bg-slate-800/50">
+                            <div>
+                                <span className="text-sm font-medium text-slate-300 group-hover/toggle:text-white transition-colors">Auto-Summarization</span>
+                                <p className="text-xs text-slate-500">Summarize old messages to save context.</p>
                             </div>
-                            <button type="button" role="switch" aria-checked={settings.thinkingEnabled} onClick={() => onSetThinkingEnabled(!settings.thinkingEnabled)} className={`relative inline-flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.thinkingEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
-                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out ${settings.thinkingEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </button>
-                        </div>
-                        <div className="flex justify-between items-center">
-                             <div className="flex items-center gap-3">
-                                 <Icon name="book-open" className="w-6 h-6 text-slate-400 shrink-0" />
-                                 <div>
-                                     <label className="block text-sm font-medium text-slate-300">Auto-Summarize Memory</label>
-                                     <p className="text-xs text-slate-500">Summarizes old messages to prevent the AI from forgetting.</p>
-                                 </div>
-                             </div>
-                             <button type="button" role="switch" aria-checked={settings.memoryEnabled} onClick={() => onSetMemoryEnabled(!settings.memoryEnabled)} className={`relative inline-flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${settings.memoryEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
-                                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out ${settings.memoryEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                             </button>
-                         </div>
+                            <div className="relative">
+                                <input
+                                type="checkbox"
+                                id="memoryEnabled"
+                                checked={settings.memoryEnabled}
+                                onChange={(e) => onSetMemoryEnabled(e.target.checked)}
+                                className="sr-only"
+                                />
+                                <div className={`block w-10 h-6 rounded-full transition-colors ${settings.memoryEnabled ? 'bg-crimson-500' : 'bg-slate-700'}`}></div>
+                                <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${settings.memoryEnabled ? 'translate-x-4' : ''}`}></div>
+                            </div>
+                        </label>
                     </div>
+
                 </div>
             )}
         </div>
