@@ -13,17 +13,20 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  state: State = {
-    hasError: false,
-    error: undefined,
-  };
+  // FIX: Added constructor to initialize state properly.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
-  componentDidCatch = (error: Error, errorInfo: ErrorInfo): void => {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
       {
@@ -36,12 +39,11 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  handleRetry = (): void => {
+  handleRetry(): void {
     this.setState({ hasError: false, error: undefined });
-  };
+  }
 
-  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
-  render = (): ReactNode => {
+  render(): ReactNode {
     if (this.state.hasError) {
       return (
         <div className="bg-red-900/50 border border-red-500/50 rounded-lg p-4 m-4 text-red-300">
@@ -56,7 +58,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
               </p>
             </div>
             <button
-              onClick={this.handleRetry}
+              onClick={() => this.handleRetry()}
               className="px-3 py-1 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-md transition-colors"
             >
               Retry

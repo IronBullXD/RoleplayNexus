@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Character, ChatSession, GroupChatSession } from '../types';
+import { Character, ChatSession, GroupChatSession, Message } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
 import { motion } from 'framer-motion';
+import { useUIStore } from '../store/stores/uiStore';
 
 interface HistoryModalProps {
   onClose: () => void;
@@ -76,13 +77,14 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 function HistoryModal({ onClose }: HistoryModalProps) {
   const {
     characters,
-    conversations,
-    groupConversations,
-    selectSession,
-    selectGroupSession,
+    sessions,
+    characterSessions,
+    groupSessions,
+    messages: allMessages,
     deleteSession,
     deleteGroupSession,
   } = useAppStore();
+  const { setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
   const [activeTab, setActiveTab] = useState<'single' | 'group'>('single');
 
   useEffect(() => {
@@ -95,28 +97,49 @@ function HistoryModal({ onClose }: HistoryModalProps) {
 
   const singleChatSessions = useMemo(
     () =>
-      Object.entries(conversations)
-        .flatMap(([charId, sessions]: [string, ChatSession[]]) =>
-          sessions.map((s) => ({
-            charId,
-            session: s,
-            lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
-          })),
-        )
+      Object.entries(characterSessions)
+        .flatMap(([charId, sessionIds]: [string, string[]]) => {
+            return sessionIds.map(sessionId => {
+                const session = sessions[sessionId];
+                if (!session) return null;
+                const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
+                return {
+                    charId,
+                    session,
+                    lastMessageTimestamp: lastMessage?.timestamp || 0,
+                };
+            }).filter((s): s is NonNullable<typeof s> => s !== null);
+        })
         .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp),
-    [conversations],
+    [characterSessions, sessions, allMessages],
   );
 
   const groupChatSessions = useMemo(
     () =>
-      Object.values(groupConversations)
-        .map((s: GroupChatSession) => ({
-          session: s,
-          lastMessageTimestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
-        }))
+      Object.values(groupSessions)
+        .map((session) => {
+            const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
+            return {
+                session,
+                lastMessageTimestamp: lastMessage?.timestamp || 0,
+            };
+        })
         .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp),
-    [groupConversations],
+    [groupSessions, allMessages],
   );
+
+  const handleSelectSession = (characterId: string, sessionId: string) => {
+    setActiveCharacterId(characterId);
+    setActiveSessionId(sessionId);
+    setCurrentView('CHAT');
+    onClose();
+  };
+
+  const handleSelectGroupSession = (sessionId: string) => {
+    setActiveGroupSessionId(sessionId);
+    setCurrentView('GROUP_CHAT');
+    onClose();
+  };
 
   return (
     <motion.div
@@ -179,19 +202,16 @@ function HistoryModal({ onClose }: HistoryModalProps) {
                 singleChatSessions.map(({ session, charId }) => {
                   const character = characters.find((c) => c.id === charId);
                   if (!character) return null;
-                  const lastMessage = session.messages[session.messages.length - 1];
+                  const lastMessage = session.messageIds.length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
                   return (
                     <HistoryItem
                       key={session.id}
                       avatars={[character.avatar]}
                       title={character.name}
                       subtitle={session.title}
-                      lastMessage={lastMessage?.content}
+                      lastMessage={lastMessage?.content || ''}
                       lastMessageTimestamp={lastMessage?.timestamp}
-                      onSelect={() => {
-                        selectSession(charId, session.id);
-                        onClose();
-                      }}
+                      onSelect={() => handleSelectSession(charId, session.id)}
                       onDelete={() => deleteSession(charId, session.id)}
                     />
                   );
@@ -210,19 +230,16 @@ function HistoryModal({ onClose }: HistoryModalProps) {
                     .map((id) => characters.find((c) => c.id === id))
                     .filter((c): c is Character => !!c);
                   const lastMessage =
-                    session.messages[session.messages.length - 1];
+                    session.messageIds.length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
                   return (
                     <HistoryItem
                       key={session.id}
                       avatars={sessionCharacters.map((c) => c.avatar)}
                       title={session.title}
                       subtitle="Group Chat"
-                      lastMessage={lastMessage?.content}
+                      lastMessage={lastMessage?.content || ''}
                       lastMessageTimestamp={lastMessage?.timestamp}
-                      onSelect={() => {
-                        selectGroupSession(session.id);
-                        onClose();
-                      }}
+                      onSelect={() => handleSelectGroupSession(session.id)}
                       onDelete={() => deleteGroupSession(session.id)}
                     />
                   );

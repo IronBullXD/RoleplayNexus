@@ -91,6 +91,7 @@ const icons: { [key: string]: LucideIconComponent } = {
 
 interface IconProps extends LucideProps {
   name: string;
+  className?: string;
 }
 
 export const Icon: React.FC<IconProps> = ({

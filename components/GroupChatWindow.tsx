@@ -268,17 +268,18 @@ function formatRelativeTime(timestamp: number): string {
 function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
   const {
     activeGroupSessionId,
-    groupConversations,
+    groupSessions,
+    messages: allMessages,
     characters,
     userPersona,
     settings,
     worlds,
     setCurrentView,
-    setWorld,
-    setTemperature,
-    setContextSize,
-    setMaxOutputTokens,
-    setMemoryEnabled,
+    setSessionWorld,
+    setSessionTemperature,
+    setSessionContextSize,
+    setSessionMaxOutputTokens,
+    setSessionMemoryEnabled,
     editGroupMessage,
     deleteGroupMessage,
     regenerateGroupResponse,
@@ -289,8 +290,8 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
   } = useAppStore();
 
   const session = useMemo(
-    () => groupConversations[activeGroupSessionId || ''] || null,
-    [groupConversations, activeGroupSessionId],
+    () => (activeGroupSessionId ? groupSessions[activeGroupSessionId] : null),
+    [groupSessions, activeGroupSessionId],
   );
 
   const activeWorld = useMemo(
@@ -306,6 +307,12 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    if (activeGroupSessionId) {
+      editGroupMessage(activeGroupSessionId, messageId, newContent);
+    }
+  }, [activeGroupSessionId, editGroupMessage]);
+
   const {
     editingMessageId,
     editingText,
@@ -313,9 +320,13 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     startEditing,
     saveEdit,
     cancelEdit,
-  } = useMessageEditing(editGroupMessage);
+  } = useMessageEditing(handleEditMessage);
 
-  const messages = session?.messages || [];
+  const messages = useMemo(() => {
+    if (!session) return [];
+    return (session.messageIds || []).map(id => allMessages[id]).filter(Boolean);
+  }, [session, allMessages]);
+
   const { displayedMessages, hasMore, loadMore } = usePaginatedMessages(
     messages,
     scrollContainerRef,
@@ -328,12 +339,12 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
   const tokenCount = useMemo(
     () =>
       Math.ceil(
-        (session?.messages || []).reduce(
+        messages.reduce(
           (sum, msg) => sum + msg.content.length,
           0,
         ) / 4,
       ),
-    [session?.messages],
+    [messages],
   );
 
   useEffect(() => {
@@ -348,7 +359,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-  }, [session?.messages, isLoading]);
+  }, [messages, isLoading]);
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -364,10 +375,10 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     if (input.trim()) {
       sendGroupMessage(input.trim());
       setInput('');
-    } else if (session?.messages.length > 0) {
-      continueGroupGeneration();
+    } else if (messages.length > 0 && activeGroupSessionId) {
+      continueGroupGeneration(activeGroupSessionId);
     }
-  }, [isLoading, input, session, sendGroupMessage, continueGroupGeneration]);
+  }, [isLoading, input, messages, activeGroupSessionId, sendGroupMessage, continueGroupGeneration]);
 
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -388,9 +399,9 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
   );
 
   const lastMessageTimestamp = useMemo(() => {
-    const lastMsg = session?.messages.filter((m) => m.role !== 'system').pop();
+    const lastMsg = messages.filter((m) => m.role !== 'system').pop();
     return lastMsg?.timestamp;
-  }, [session?.messages]);
+  }, [messages]);
 
   if (!session) return null;
 
@@ -398,11 +409,11 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     session.characterIds.includes(c.id),
   );
   const avatarSlice = sessionCharacters.slice(0, 3);
-  const lastMessage = session.messages[session.messages.length - 1];
+  const lastMessage = messages[messages.length - 1];
   const isReceiving = isLoading && lastMessage?.role === 'assistant';
   const showTypingIndicator = isLoading && !isReceiving;
   const canSubmit = !!input.trim();
-  const canContinue = !canSubmit && session.messages.length > 0;
+  const canContinue = !canSubmit && messages.length > 0;
 
   return (
     <div className="flex-1 flex flex-col bg-transparent h-screen">
@@ -459,11 +470,12 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
               memoryEnabled: session.memoryEnabled ?? false,
             }}
             worlds={worlds}
-            onSetWorld={setWorld}
-            onSetTemperature={setTemperature}
-            onSetContextSize={setContextSize}
-            onSetMaxOutputTokens={setMaxOutputTokens}
-            onSetMemoryEnabled={setMemoryEnabled}
+// FIX: Add `true` for isGroup parameter to session setting functions to ensure group chat settings are updated correctly.
+            onSetWorld={(worldId) => activeGroupSessionId && setSessionWorld(activeGroupSessionId, worldId, true)}
+            onSetTemperature={(temp) => activeGroupSessionId && setSessionTemperature(activeGroupSessionId, temp, true)}
+            onSetContextSize={(size) => activeGroupSessionId && setSessionContextSize(activeGroupSessionId, size, true)}
+            onSetMaxOutputTokens={(tokens) => activeGroupSessionId && setSessionMaxOutputTokens(activeGroupSessionId, tokens, true)}
+            onSetMemoryEnabled={(enabled) => activeGroupSessionId && setSessionMemoryEnabled(activeGroupSessionId, enabled, true)}
           />
         </div>
       </header>
@@ -511,9 +523,9 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
                 userPersona={userPersona}
                 isLastMessage={msg.id === lastMessage?.id}
                 isLoading={isLoading}
-                onDelete={deleteGroupMessage}
-                onRegenerate={regenerateGroupResponse}
-                onFork={forkGroupChat}
+                onDelete={(messageId) => activeGroupSessionId && deleteGroupMessage(activeGroupSessionId, messageId)}
+                onRegenerate={() => activeGroupSessionId && regenerateGroupResponse(activeGroupSessionId)}
+                onFork={(messageId) => activeGroupSessionId && forkGroupChat(activeGroupSessionId, messageId)}
                 isEditing={msg.id === editingMessageId}
                 editingText={editingText}
                 onSetEditingText={setEditingText}

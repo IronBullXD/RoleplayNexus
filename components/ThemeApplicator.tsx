@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import { useAppStore } from '../store/useAppStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
 import { applyTheme } from '../services/themeService';
 
 const ThemeApplicator = () => {
-    const themes = useAppStore(state => state.themes);
-    const activeThemeId = useAppStore(state => state.activeThemeId);
+    const themes = useSettingsStore(state => state.themes);
+    const activeThemeId = useSettingsStore(state => state.activeThemeId);
     
     useEffect(() => {
         const activeTheme = themes.find(t => t.id === activeThemeId) || themes.find(t => t.id === 'cyber-noir');

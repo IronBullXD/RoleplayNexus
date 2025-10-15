@@ -1,10 +1,11 @@
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
-import { Character, ChatSession, GroupChatSession } from '../types';
+import { Character, ChatSession, GroupChatSession, Message } from '../types';
 import { Icon, IconButton } from './Icon';
 import SimpleMarkdown from './SimpleMarkdown';
 import { GM_CHARACTER_ID } from '../constants';
 import Avatar from './Avatar';
 import { useAppStore } from '../store/useAppStore';
+import { useUIStore } from '../store/stores/uiStore';
 
 interface CharacterSelectionProps {
   onNewCharacter: () => void;
@@ -247,7 +248,7 @@ function NewCharacterCard({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-crimson-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-crimson-600/10 hover:-translate-y-1 animate-pulse-glow"
+      className="bg-slate-900/50 rounded-lg flex flex-col items-center justify-center group relative aspect-[4/5] border border-slate-700 hover:border-crimson-500 hover:bg-slate-800/30 transition-all duration-300 hover:shadow-xl hover:shadow-crimson-600/10 animate-pulse-glow"
     >
       <Icon
         name="add"
@@ -276,18 +277,35 @@ function CharacterSelection({
 }: CharacterSelectionProps) {
   const {
     characters,
-    conversations,
-    groupConversations,
-    startChat,
-    selectSession,
-    selectGroupSession,
+    sessions,
+    groupSessions,
+    characterSessions,
+    messages: allMessages,
+    newSession,
     deleteCharacter,
     importCharacters,
     duplicateCharacter,
   } = useAppStore();
+  const { setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('last-played');
+
+  const handleSelectSession = (characterId: string, sessionId: string) => {
+    setActiveCharacterId(characterId);
+    setActiveSessionId(sessionId);
+    setCurrentView('CHAT');
+  };
+  const handleSelectGroupSession = (sessionId: string) => {
+    setActiveGroupSessionId(sessionId);
+    setCurrentView('GROUP_CHAT');
+  };
+  const handleStartChat = (characterId: string) => {
+    const sessionId = newSession(characterId);
+    if (sessionId) {
+      handleSelectSession(characterId, sessionId);
+    }
+  };
 
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -337,43 +355,49 @@ function CharacterSelection({
   }, []);
 
   const { recentSessions, totalRecentCount } = useMemo(() => {
-    const singleSessions = Object.entries(conversations).flatMap(
-      ([charId, sessions]: [string, ChatSession[]]) => {
+    const singleSessions = Object.entries(characterSessions).flatMap(
+      ([charId, sessionIds]: [string, string[]]) => {
         const char = characters.find((c) => c.id === charId);
         return char
-          ? sessions.map((s) => ({
-              type: 'single' as const,
-              id: s.id,
-              characterId: charId,
-              title: char.name,
-              avatars: [char.avatar],
-              lastMessage:
-                s.messages[s.messages.length - 1]?.content || 'Chat started.',
-              timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
-            }))
+          ? sessionIds.map((sessionId) => {
+                const s = sessions[sessionId];
+                if (!s || (s.messageIds || []).length === 0) return null;
+                const lastMessage = s.messageIds.length > 0 ? allMessages[s.messageIds[s.messageIds.length-1]] : null;
+                return {
+                    type: 'single' as const,
+                    id: s.id,
+                    characterId: charId,
+                    title: char.name,
+                    avatars: [char.avatar],
+                    lastMessage: lastMessage?.content || 'Chat started.',
+                    timestamp: lastMessage?.timestamp || 0,
+                };
+            }).filter((s): s is NonNullable<typeof s> => s !== null)
           : [];
       },
     );
 
-    const groupSessions = Object.values(groupConversations).map(
-      (s: GroupChatSession) => {
+    const groupSessionsMapped = Object.values(groupSessions).map(
+      (s) => {
         const sessionChars = s.characterIds
           .map((id) => characters.find((c) => c.id === id))
           .filter(Boolean) as Character[];
+        if ((s.messageIds || []).length === 0) return null;
+        const lastMessage = s.messageIds.length > 0 ? allMessages[s.messageIds[s.messageIds.length-1]] : null;
         return {
           type: 'group' as const,
           id: s.id,
           title: s.title,
           avatars: sessionChars.map((c) => c.avatar),
           lastMessage:
-            s.messages[s.messages.length - 1]?.content ||
+            lastMessage?.content ||
             'Group chat started.',
-          timestamp: s.messages[s.messages.length - 1]?.timestamp || 0,
+          timestamp: lastMessage?.timestamp || 0,
         };
       },
-    );
+    ).filter((s): s is NonNullable<typeof s> => s !== null);
 
-    const allSessions = [...singleSessions, ...groupSessions]
+    const allSessions = [...singleSessions, ...groupSessionsMapped]
       .filter((s) => s.timestamp > 0)
       .sort((a, b) => b.timestamp - a.timestamp)
       .map((s) => ({ ...s, lastMessageDate: formatRelativeTime(s.timestamp) }));
@@ -382,7 +406,7 @@ function CharacterSelection({
       recentSessions: allSessions.slice(0, RECENT_CHAT_LIMIT),
       totalRecentCount: allSessions.length,
     };
-  }, [characters, conversations, groupConversations]);
+  }, [characters, sessions, groupSessions, characterSessions, allMessages]);
 
   const userCharacters = useMemo(
     () => characters.filter((c) => !c.isImmutable),
@@ -391,17 +415,17 @@ function CharacterSelection({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
-    Object.entries(conversations).forEach(
-      ([charId, sessions]: [string, ChatSession[]]) => {
+    Object.entries(characterSessions).forEach(
+      ([charId, sessionIds]) => {
         let maxTimestamp = 0;
-        sessions.forEach((session) => {
-          if (session.messages.length > 0) {
-            const lastMessageTs =
-              session.messages[session.messages.length - 1]?.timestamp;
-            if (lastMessageTs && lastMessageTs > maxTimestamp) {
-              maxTimestamp = lastMessageTs;
+        sessionIds.forEach((sessionId) => {
+            const session = sessions[sessionId];
+            if (session && session.messageIds && session.messageIds.length > 0) {
+              const lastMessage = allMessages[session.messageIds[session.messageIds.length - 1]];
+              if (lastMessage?.timestamp && lastMessage.timestamp > maxTimestamp) {
+                maxTimestamp = lastMessage.timestamp;
+              }
             }
-          }
         });
         if (maxTimestamp > 0) {
           timestamps.set(charId, maxTimestamp);
@@ -409,7 +433,7 @@ function CharacterSelection({
       },
     );
     return timestamps;
-  }, [conversations]);
+  }, [characterSessions, sessions, allMessages]);
 
   const sortedAndFilteredCharacters = useMemo(() => {
     return userCharacters
@@ -484,7 +508,7 @@ function CharacterSelection({
           />
           <div className="h-6 w-px bg-slate-700 mx-1"></div>
           <button
-            onClick={() => startChat(GM_CHARACTER_ID)}
+            onClick={() => handleStartChat(GM_CHARACTER_ID)}
             className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"
           >
             <Icon name="play" className="w-4 h-4" /> Start GM Session
@@ -510,9 +534,9 @@ function CharacterSelection({
                   session={session}
                   onClick={() => {
                     if (session.type === 'single' && session.characterId)
-                      selectSession(session.characterId, session.id);
+                      handleSelectSession(session.characterId, session.id);
                     else if (session.type === 'group')
-                      selectGroupSession(session.id);
+                      handleSelectGroupSession(session.id);
                   }}
                 />
               ))}
@@ -568,7 +592,7 @@ function CharacterSelection({
               <CharacterCard
                 key={char.id}
                 character={char}
-                onChat={startChat}
+                onChat={handleStartChat}
                 onEdit={handleEdit}
                 onDelete={deleteCharacter}
                 onExport={handleExportCharacter}

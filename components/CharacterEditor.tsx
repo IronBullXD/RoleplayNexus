@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Character, StructuredPersona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
+import { useCharacterStore } from '../store/stores/characterStore';
 import { motion } from 'framer-motion';
 
 interface CharacterEditorProps {
@@ -95,7 +95,7 @@ function PersonaField({
 }
 
 function CharacterEditor({ character, onClose }: CharacterEditorProps) {
-  const { saveCharacter, generateCharacterProfile } = useAppStore();
+  const { saveCharacter, generateCharacterProfile } = useCharacterStore();
   const [formData, setFormData] = useState<Partial<Character>>({
     name: '',
     avatar: '',

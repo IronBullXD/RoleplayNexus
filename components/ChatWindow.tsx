@@ -273,18 +273,19 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   const {
     activeCharacterId,
     characters,
-    conversations,
+    sessions,
+    messages: allMessages,
     activeSessionId,
     userPersona,
     settings,
     worlds,
     resetChatView,
     newSession,
-    setWorld,
-    setTemperature,
-    setContextSize,
-    setMaxOutputTokens,
-    setMemoryEnabled,
+    setSessionWorld,
+    setSessionTemperature,
+    setSessionContextSize,
+    setSessionMaxOutputTokens,
+    setSessionMemoryEnabled,
     deleteMessage,
     regenerateResponse,
     forkChat,
@@ -299,11 +300,8 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     [characters, activeCharacterId],
   );
   const session = useMemo(
-    () =>
-      conversations[activeCharacterId || '']?.find(
-        (s) => s.id === activeSessionId,
-      ),
-    [conversations, activeCharacterId, activeSessionId],
+    () => (activeSessionId ? sessions[activeSessionId] : undefined),
+    [sessions, activeSessionId],
   );
 
   const activeWorld = useMemo(
@@ -320,6 +318,12 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    if (activeSessionId) {
+      editMessage(activeSessionId, messageId, newContent);
+    }
+  }, [activeSessionId, editMessage]);
+
   const {
     editingMessageId,
     editingText,
@@ -327,7 +331,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     startEditing,
     saveEdit,
     cancelEdit,
-  } = useMessageEditing(editMessage);
+  } = useMessageEditing(handleEditMessage);
 
   useEffect(() => {
     if (character)
@@ -344,7 +348,11 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     };
   }, [character]);
 
-  const messages = session?.messages || [];
+  const messages = useMemo(() => {
+    if (!session) return [];
+    return (session.messageIds || []).map(id => allMessages[id]).filter(Boolean);
+  }, [session, allMessages]);
+  
   const { displayedMessages, hasMore, loadMore } = usePaginatedMessages(
     messages,
     scrollContainerRef,
@@ -399,10 +407,10 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     if (input.trim()) {
       sendMessage(input.trim());
       setInput('');
-    } else if (session?.messages.length) {
-      continueGeneration();
+    } else if (messages.length && activeSessionId) {
+      continueGeneration(activeSessionId);
     }
-  }, [isLoading, input, session, sendMessage, continueGeneration]);
+  }, [isLoading, input, messages, activeSessionId, sendMessage, continueGeneration]);
 
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -431,9 +439,9 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   }, []);
 
   const lastMessageTimestamp = useMemo(() => {
-    const lastMsg = session?.messages.filter((m) => m.role !== 'system').pop();
+    const lastMsg = messages.filter((m) => m.role !== 'system').pop();
     return lastMsg?.timestamp;
-  }, [session?.messages]);
+  }, [messages]);
 
   if (!character || !session) return null;
 
@@ -443,7 +451,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   const canSubmit = !!input.trim();
   const canContinue =
     !canSubmit &&
-    session.messages.length > 0 &&
+    messages.length > 0 &&
     lastMessage?.role === 'assistant';
 
   return (
@@ -481,7 +489,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <IconButton icon="new-chat" label="New Chat" onClick={newSession} />
+          <IconButton icon="new-chat" label="New Chat" onClick={() => character.id && newSession(character.id)} />
           <IconButton
             icon="history"
             label="Chat History"
@@ -497,11 +505,12 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
               memoryEnabled: session.memoryEnabled ?? false,
             }}
             worlds={worlds}
-            onSetWorld={setWorld}
-            onSetTemperature={setTemperature}
-            onSetContextSize={setContextSize}
-            onSetMaxOutputTokens={setMaxOutputTokens}
-            onSetMemoryEnabled={setMemoryEnabled}
+// FIX: Explicitly pass `false` for isGroup parameter to match function signature and prevent type errors.
+            onSetWorld={(worldId) => activeSessionId && setSessionWorld(activeSessionId, worldId, false)}
+            onSetTemperature={(temp) => activeSessionId && setSessionTemperature(activeSessionId, temp, false)}
+            onSetContextSize={(size) => activeSessionId && setSessionContextSize(activeSessionId, size, false)}
+            onSetMaxOutputTokens={(tokens) => activeSessionId && setSessionMaxOutputTokens(activeSessionId, tokens, false)}
+            onSetMemoryEnabled={(enabled) => activeSessionId && setSessionMemoryEnabled(activeSessionId, enabled, false)}
           />
         </div>
       </header>
@@ -535,9 +544,9 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
                 userPersona={userPersona}
                 isLastMessage={msg.id === lastMessage?.id}
                 isLoading={isLoading}
-                onDelete={deleteMessage}
-                onRegenerate={regenerateResponse}
-                onFork={forkChat}
+                onDelete={(messageId) => activeSessionId && deleteMessage(activeSessionId, messageId)}
+                onRegenerate={() => activeSessionId && regenerateResponse(activeSessionId)}
+                onFork={(messageId) => activeSessionId && forkChat(activeSessionId, messageId)}
                 isEditing={msg.id === editingMessageId}
                 editingText={editingText}
                 onSetEditingText={setEditingText}

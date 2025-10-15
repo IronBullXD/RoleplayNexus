@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Persona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
 import { motion } from 'framer-motion';
 
 interface PersonaEditorProps {
@@ -11,7 +11,7 @@ interface PersonaEditorProps {
 }
 
 const PersonaEditor: React.FC<PersonaEditorProps> = ({ persona, onClose }) => {
-  const { savePersona } = useAppStore();
+  const { savePersona } = useSettingsStore();
   const [formData, setFormData] = useState<Persona>(persona);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

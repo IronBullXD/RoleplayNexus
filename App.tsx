@@ -1,5 +1,10 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { useAppStore } from './store/useAppStore';
+import { useUIStore } from './store/stores/uiStore';
+import { useSettingsStore } from './store/stores/settingsStore';
+import { useCharacterStore } from './store/stores/characterStore';
+import { useWorldStore } from './store/stores/worldStore';
+import { useChatStore } from './store/stores/chatStore';
+import { useAppStateForDebug } from './store/selectors';
 import { Character } from './types';
 import { logger } from './services/logger';
 import { AnimatePresence } from 'framer-motion';
@@ -7,6 +12,7 @@ import BackgroundAnimation from './components/BackgroundAnimation';
 import ComponentErrorBoundary from './components/ComponentErrorBoundary';
 import ThemeApplicator from './components/ThemeApplicator';
 import LoadingIndicator from './components/LoadingIndicator';
+import { GM_CHARACTER, DEFAULT_CHARACTER } from './constants';
 
 // --- Lazy Loaded Components ---
 const ChatWindow = lazy(() => import('./components/ChatWindow'));
@@ -28,23 +34,39 @@ function App() {
     handleCloseConfirmation,
     handleConfirm,
     confirmationAction,
-    getAppState,
-    userPersona,
-    worlds,
+    isInitialized,
+    setInitialized,
+    activeCharacterId,
+    activeSessionId,
+    activeGroupSessionId,
     setCurrentView,
-    initStore,
-  } = useAppStore();
-
-  const activeCharacterId = useAppStore((state) => state.activeCharacterId);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const activeGroupSessionId = useAppStore(
-    (state) => state.activeGroupSessionId,
-  );
-  const characters = useAppStore((state) => state.characters);
+    resetChatView
+  } = useUIStore();
+  
+  const userPersona = useSettingsStore(state => state.userPersona);
+  const worlds = useWorldStore(state => state.worlds);
+  const characters = useCharacterStore(state => state.characters);
+  const getAppState = useAppStateForDebug;
 
   useEffect(() => {
-    initStore(); // Ensures GM character is present on startup
-  }, [initStore]);
+    if (!isInitialized) {
+      logger.log('Store initializing...');
+      // This logic was previously in initStore
+      const { _setCharacters, characters } = useCharacterStore.getState();
+      let currentChars = characters;
+      if (!currentChars.some(c => c.id === GM_CHARACTER.id)) {
+        currentChars = [GM_CHARACTER, ...currentChars];
+      }
+      if (currentChars.filter(c => !c.isImmutable).length === 0) {
+        if (!currentChars.some(c => c.id === DEFAULT_CHARACTER.id)) {
+            currentChars.push(DEFAULT_CHARACTER);
+        }
+      }
+      _setCharacters(currentChars);
+      setInitialized(true);
+      logger.log('Store initialized');
+    }
+  }, [isInitialized, setInitialized]);
 
   useEffect(() => {
     const activeCharacter = characters.find((c) => c.id === activeCharacterId);
@@ -58,7 +80,7 @@ function App() {
         activeSessionId,
         activeGroupSessionId,
       });
-      useAppStore.getState().resetChatView();
+      resetChatView();
     }
   }, [
     currentView,
@@ -66,6 +88,7 @@ function App() {
     activeCharacterId,
     activeSessionId,
     activeGroupSessionId,
+    resetChatView
   ]);
 
   // --- Modal State Management ---
@@ -78,20 +101,13 @@ function App() {
     debug: false,
   });
 
-  const openModal = (modal: keyof typeof modals) =>
-    setModals((prev) => ({ ...prev, [modal]: true }));
-  const closeModal = (modal: keyof typeof modals) =>
-    setModals((prev) => ({ ...prev, [modal]: false }));
-
-  const [editingCharacter, setEditingCharacter] = useState<Character | null>(
-    null,
-  );
-
+  const openModal = (modal: keyof typeof modals) => setModals((prev) => ({ ...prev, [modal]: true }));
+  const closeModal = (modal: keyof typeof modals) => setModals((prev) => ({ ...prev, [modal]: false }));
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   const handleNewCharacter = () => {
     setEditingCharacter(null);
     openModal('characterEditor');
   };
-
   const handleEditCharacter = (character: Character) => {
     setEditingCharacter(character);
     openModal('characterEditor');
@@ -103,14 +119,10 @@ function App() {
         if (!activeCharacterId || !activeSessionId) return null;
         return <ChatWindow onNavigateToHistory={() => openModal('history')} />;
       case 'GROUP_CHAT_SETUP':
-        return (
-          <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />
-        );
+        return <GroupChatSetup onBack={() => setCurrentView('CHARACTER_SELECTION')} />;
       case 'GROUP_CHAT':
         if (!activeGroupSessionId) return null;
-        return (
-          <GroupChatWindow onNavigateToHistory={() => openModal('history')} />
-        );
+        return <GroupChatWindow onNavigateToHistory={() => openModal('history')} />;
       case 'CHARACTER_SELECTION':
       default:
         return (

@@ -17,6 +17,42 @@ const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // Module-level cache for pre-computed world indices.
 const worldIndexCache = new Map<string, { index: any; entriesJSON: string }>();
 
+
+/**
+ * A wrapper around fetch that implements exponential backoff for retries.
+ * @param url The URL to fetch.
+ * @param options The fetch options.
+ * @param retries The number of times to retry.
+ * @param backoff The backoff factor.
+ * @returns A promise that resolves to the fetch response.
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  backoff = 300,
+): Promise<Response> {
+  const [minBackoff, maxBackoff] = [backoff, 5000];
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      // Retry on 5xx server errors
+      if (response.status >= 500 && response.status < 600) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      const delay = Math.min(minBackoff * Math.pow(2, i), maxBackoff) + Math.random() * 100;
+      logger.log(`API call failed, retrying in ${delay.toFixed(0)}ms...`, { attempt: i + 1, error });
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+  // This line should not be reachable, but is required for type safety.
+  throw new Error("Fetch failed after multiple retries.");
+}
+
+
 /**
  * Merges consecutive messages from the same role (user or assistant) into a single message.
  * This is crucial for models like Gemini that require a strict alternating user/model sequence,
@@ -404,11 +440,7 @@ CRITICAL INSTRUCTIONS:
                 response_format: { type: "json_object" },
             };
             
-            // Note: The schema for OpenAI is a bit different. We ask for an object with a key.
-            // A better implementation would adjust the prompt to ask for `{"contradictions": [...]}`
-            // For now, we assume it might return the array directly in a 'content' field.
-            
-            const response = await fetch(endpoint, {
+            const response = await fetchWithRetry(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
                 body: JSON.stringify(body)
@@ -494,7 +526,7 @@ Instructions:
         temperature: 0.3, // Lower temperature for more factual summary
       };
 
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -619,7 +651,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
         response_format: { type: 'json_object' },
       };
 
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -821,9 +853,11 @@ async function* getOpenAICompatibleCompletionStream(
       body: errorBodyText,
       requestBody: body,
     });
-    throw new Error(
+    const error = new Error(
       `API request failed with status ${response.status}: ${errorBodyText}`,
     );
+    (error as any).status = response.status;
+    throw error;
   }
 
   if (!response.body) {
@@ -1255,7 +1289,7 @@ Based on the conversation history, generate the next turn in the scene.`;
       response_format: { type: 'json_object' },
     };
 
-    const response = await fetch(API_ENDPOINTS[provider], {
+    const response = await fetchWithRetry(API_ENDPOINTS[provider], {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1266,9 +1300,9 @@ Based on the conversation history, generate the next turn in the scene.`;
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(
-        `API request failed with status ${response.status}: ${errorBody}`,
-      );
+      const error = new Error(`API request failed with status ${response.status}: ${errorBody}`);
+      (error as any).status = response.status;
+      throw error;
     }
     const data = await response.json();
     const content = data.choices[0]?.message?.content;

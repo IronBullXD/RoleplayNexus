@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Theme, ThemeConfig } from '../types';
 import { Icon } from './Icon';
-import { useAppStore } from '../store/useAppStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
 import { motion } from 'framer-motion';
 import { applyTheme } from '../services/themeService';
 
@@ -37,7 +37,7 @@ const ColorInput: React.FC<{
 );
 
 const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({ theme, onClose }) => {
-    const { saveTheme, themes, activeThemeId } = useAppStore();
+    const { saveTheme, themes, activeThemeId } = useSettingsStore();
     const [name, setName] = useState('');
     const [config, setConfig] = useState<ThemeConfig>({
         primary: '#ef4444',

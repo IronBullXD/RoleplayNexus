@@ -12,10 +12,14 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  state: State = {
-    hasError: false,
-    error: undefined,
-  };
+// FIX: Add a constructor to initialize state, ensuring `this.state` is properly set up.
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -32,7 +36,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  handleResetAndReload = (): void => {
+  handleResetAndReload(): void {
     logger.log('Attempting to clear storage and reload from error boundary.');
     try {
       window.localStorage.clear();
@@ -40,10 +44,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       logger.error('Failed to clear local storage', e);
     }
     window.location.reload();
-  };
+  }
 
-  // Fix: Converted to an arrow function to ensure `this` is correctly bound.
-  render = (): ReactNode => {
+  render(): ReactNode {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-4">
@@ -80,7 +83,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
                 Reload Page
               </button>
               <button
-                onClick={this.handleResetAndReload}
+                onClick={() => this.handleResetAndReload()}
                 className="px-4 py-2 text-sm font-medium text-red-300 bg-red-600/20 hover:bg-red-600/40 rounded-lg transition-colors"
               >
                 Reset and Reload

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, LLMProvider, Theme, ThemeConfig } from '../types';
 import { Icon } from './Icon';
-import { useAppStore } from '../store/useAppStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemeEditorModal from './ThemeEditorModal';
 
@@ -155,7 +155,7 @@ function GeneralSection({
 }
 
 function AppearanceSection() {
-    const { themes, activeThemeId, setActiveTheme, deleteTheme } = useAppStore();
+    const { themes, activeThemeId, setActiveTheme, deleteTheme } = useSettingsStore();
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
 
@@ -391,7 +391,7 @@ function PromptsSection({
 }
 
 function SettingsModal({ onClose }: SettingsModalProps) {
-  const { settings: currentSettings, saveSettings } = useAppStore();
+  const { settings: currentSettings, saveSettings } = useSettingsStore();
   const [settings, setSettings] = useState<Settings>(currentSettings);
   const [activeSection, setActiveSection] =
     useState<SettingsSection>('general');
