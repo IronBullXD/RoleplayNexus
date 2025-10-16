@@ -5,6 +5,8 @@ import Avatar from './Avatar';
 import WorldEditorPage from './WorldEditorPage';
 import { useWorldStore } from '../store/stores/worldStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { warmWorldCache } from '../services/llmService';
+import { logger } from '../services/logger';
 
 const CustomCheckbox: React.FC<{
   checked: boolean;
@@ -141,6 +143,18 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, isEditorOpen]);
+
+  // Effect for background preloading of world indices
+  useEffect(() => {
+    if (worlds.length > 0) {
+      // Use a timeout to ensure this doesn't block the UI rendering of the modal
+      const timer = setTimeout(() => {
+        logger.log('Preloading all world indices from Worlds page.');
+        warmWorldCache(worlds);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [worlds]);
 
   const handleCreateNew = () => {
     setEditingWorld(null);

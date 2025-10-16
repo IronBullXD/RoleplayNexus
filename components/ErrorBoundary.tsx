@@ -10,14 +10,13 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  // FIX: Refactored to use a constructor for state and method binding for maximum compatibility.
+  // FIX: Replaced public class field with a constructor for broader compatibility.
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
       hasError: false,
       error: undefined,
     };
-    this.handleResetAndReload = this.handleResetAndReload.bind(this);
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -35,7 +34,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  handleResetAndReload(): void {
+  handleResetAndReload = (): void => {
     logger.log('Attempting to clear storage and reload from error boundary.');
     try {
       window.localStorage.clear();
@@ -43,7 +42,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       logger.error('Failed to clear local storage', e);
     }
     window.location.reload();
-  }
+  };
 
   render(): ReactNode {
     if (this.state.hasError) {

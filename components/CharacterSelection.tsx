@@ -6,7 +6,7 @@ import { GM_CHARACTER_ID } from '../constants';
 import Avatar from './Avatar';
 import { useUIStore } from '../store/stores/uiStore';
 import { useCharacterStore } from '../store/stores/characterStore';
-import { useChatStore, GroupSession } from '../store/stores/chatStore';
+import { useChatStore, GroupSession, Session } from '../store/stores/chatStore';
 
 interface CharacterSelectionProps {
   onNewCharacter: () => void;
@@ -370,7 +370,7 @@ function CharacterSelection({
         const char = characters.find((c) => c.id === charId);
         return char
           ? sessionIds.map((sessionId) => {
-                const s = sessions[sessionId];
+                const s: Session | undefined = sessions[sessionId];
                 if (!s || (s.messageIds || []).length === 0) return null;
                 const lastMessage = s.messageIds.length > 0 ? allMessages[s.messageIds[s.messageIds.length-1]] : null;
                 return {
@@ -387,7 +387,6 @@ function CharacterSelection({
       },
     );
 
-    // FIX: Add explicit type `GroupSession` to `s` to resolve property access errors.
     const groupSessionsMapped = Object.values(groupSessions).map(
       (s: GroupSession) => {
         const sessionChars = s.characterIds
@@ -426,7 +425,6 @@ function CharacterSelection({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
-    // FIX: Add explicit type annotation to destructuring to resolve property access errors.
     Object.entries(characterSessions).forEach(
       ([charId, sessionIds]: [string, string[]]) => {
         let maxTimestamp = 0;

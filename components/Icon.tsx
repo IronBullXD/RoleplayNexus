@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Lightbulb,
   Palette,
+  Zap,
 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -87,6 +88,7 @@ const icons: { [key: string]: LucideIconComponent } = {
   'shield-check': ShieldCheck,
   lightbulb: Lightbulb,
   palette: Palette,
+  zap: Zap,
 };
 
 interface IconProps extends LucideProps {

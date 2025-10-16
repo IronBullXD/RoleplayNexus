@@ -3,7 +3,7 @@ import { useUIStore } from './store/stores/uiStore';
 import { useSettingsStore } from './store/stores/settingsStore';
 import { useCharacterStore } from './store/stores/characterStore';
 import { useWorldStore } from './store/stores/worldStore';
-import { useChatStore } from './store/stores/chatStore';
+import { useChatStore, Session, GroupSession } from './store/stores/chatStore';
 import { useAppStateForDebug } from './store/selectors';
 import { Character } from './types';
 import { logger } from './services/logger';
@@ -13,6 +13,7 @@ import ComponentErrorBoundary from './components/ComponentErrorBoundary';
 import ThemeApplicator from './components/ThemeApplicator';
 import LoadingIndicator from './components/LoadingIndicator';
 import { GM_CHARACTER, DEFAULT_CHARACTER } from './constants';
+import { warmWorldCache } from './services/llmService';
 
 // --- Lazy Loaded Components ---
 const ChatWindow = lazy(() => import('./components/ChatWindow'));
@@ -47,6 +48,7 @@ function App() {
   const worlds = useWorldStore(state => state.worlds);
   const characters = useCharacterStore(state => state.characters);
   const getAppState = useAppStateForDebug;
+  const { sessions, groupSessions, messages } = useChatStore();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -67,6 +69,39 @@ function App() {
       logger.log('Store initialized');
     }
   }, [isInitialized, setInitialized]);
+
+  // Effect for smart cache warming on startup
+  useEffect(() => {
+    if (isInitialized && worlds.length > 0) {
+      const RECENT_SESSION_LIMIT = 5;
+
+      const allSessionsWithTimestamps = [
+        // FIX: Add explicit types for session objects to resolve 'unknown' type errors.
+        ...Object.values(sessions).map((s: Session) => ({
+          worldId: s.worldId,
+          timestamp: s.messageIds.length > 0 ? messages[s.messageIds[s.messageIds.length - 1]]?.timestamp || 0 : 0,
+        })),
+        // FIX: Add explicit types for session objects to resolve 'unknown' type errors.
+        ...Object.values(groupSessions).map((s: GroupSession) => ({
+          worldId: s.worldId,
+          timestamp: s.messageIds.length > 0 ? messages[s.messageIds[s.messageIds.length - 1]]?.timestamp || 0 : 0,
+        }))
+      ];
+      
+      const recentWorldIds = allSessionsWithTimestamps
+        .filter(s => s.worldId && s.timestamp > 0)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .map(s => s.worldId!)
+        .filter((id, index, self) => self.indexOf(id) === index)
+        .slice(0, RECENT_SESSION_LIMIT);
+
+      if (recentWorldIds.length > 0) {
+        const worldsToWarm = worlds.filter(w => recentWorldIds.includes(w.id));
+        // Use queueMicrotask to defer this work slightly and not block the main thread.
+        queueMicrotask(() => warmWorldCache(worldsToWarm));
+      }
+    }
+  }, [isInitialized, worlds, sessions, groupSessions, messages]);
 
   useEffect(() => {
     const activeCharacter = characters.find((c) => c.id === activeCharacterId);

@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { validateWorld, runConsistencyCheck } from '../services/worldValidationService';
 import ValidationResultsPanel from './ValidationResultsPanel';
 import { LLMProvider } from '../types';
+import { useVirtualScroll } from '../hooks/useVirtualScroll';
 
 interface WorldEditorPageProps {
   world: Partial<World> | null;
@@ -57,9 +58,10 @@ const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
 
   return (
     <button
+      id={`entry-list-item-${entry.id}`}
       type="button"
       onClick={handleSelect}
-      className={`w-full text-left p-2 rounded-md flex items-center justify-between group ${
+      className={`w-full text-left p-2 rounded-md flex items-center justify-between group h-full ${
         isActive ? 'bg-crimson-600/20' : 'hover:bg-slate-800/70'
       }`}
     >
@@ -71,6 +73,11 @@ const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
         {entry.name || 'Unnamed Entry'}
       </span>
       <div className="flex items-center">
+        {entry.isBookmarked && (
+          <Tooltip content="Bookmarked" position="top">
+            <Icon name="pin" className="w-3.5 h-3.5 text-ember-400 mr-2" />
+          </Tooltip>
+        )}
         {!entry.enabled && (
           <Tooltip content="Disabled" position="top">
             <Icon
@@ -166,7 +173,6 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       return;
     }
     const inputValue = inputElement.value;
-    // FIX: Explicitly type currentKeys to ensure correct type inference for spread operator.
     const currentKeys: string[] = entry.keys || [];
     const lowercasedCurrentKeys = currentKeys.map((k) => k.toLowerCase());
 
@@ -177,10 +183,9 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       .filter((k) => !lowercasedCurrentKeys.includes(k.toLowerCase()));
 
     if (newKeys.length > 0) {
-      onEntryChange(entry.id, 'keys', [
-        ...currentKeys,
-        ...[...new Set(newKeys)],
-      ]);
+      // FIX: Changed `...Array.from(new Set(newKeys))` to `...newKeys` to avoid TypeScript type inference issues.
+      // `newKeys` is already filtered for uniqueness against existing keys.
+      onEntryChange(entry.id, 'keys', [...currentKeys, ...newKeys]);
     }
     inputElement.value = '';
   }, [entry.id, entry.keys, onEntryChange]);
@@ -211,7 +216,6 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedText = e.clipboardData.getData('text');
-    // FIX: Explicitly type currentKeys to ensure correct type inference for spread operator.
     const currentKeys: string[] = entry.keys || [];
     const lowercasedCurrentKeys = currentKeys.map((k) => k.toLowerCase());
 
@@ -222,10 +226,9 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       .filter((k) => !lowercasedCurrentKeys.includes(k.toLowerCase()));
 
     if (pastedKeys.length > 0) {
-      onEntryChange(entry.id, 'keys', [
-        ...currentKeys,
-        ...[...new Set(pastedKeys)],
-      ]);
+      // FIX: Changed `...Array.from(new Set(pastedKeys))` to `...pastedKeys` to avoid TypeScript type inference issues.
+      // `pastedKeys` is already filtered for uniqueness against existing keys.
+      onEntryChange(entry.id, 'keys', [...currentKeys, ...pastedKeys]);
     }
     if (keyInputRef.current) {
       keyInputRef.current.value = '';
@@ -407,6 +410,78 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
 });
 EntryInspectorPanel.displayName = 'EntryInspectorPanel';
 
+const QuickJumpModal = ({ entries, onSelect, onClose }: {
+    entries: WorldEntry[];
+    onSelect: (entryId: string) => void;
+    onClose: () => void;
+}) => {
+    const [search, setSearch] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        inputRef.current?.focus();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    const filteredEntries = useMemo(() => {
+        if (!search) return entries;
+        const lowerSearch = search.toLowerCase();
+        return entries.filter(e => e.name?.toLowerCase().includes(lowerSearch));
+    }, [search, entries]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-slate-950/70 z-10 flex justify-center pt-20"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-lg shadow-2xl flex flex-col max-h-[60vh]"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-3 border-b border-slate-800">
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Jump to entry..."
+                        className="w-full bg-slate-800 border-slate-700 rounded-md p-2 text-sm focus:ring-crimson-500 focus:border-crimson-500"
+                    />
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                    {filteredEntries.map(entry => (
+                        <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => onSelect(entry.id)}
+                            className="w-full text-left p-2 rounded-md hover:bg-slate-800 text-slate-300 hover:text-crimson-300 text-sm"
+                        >
+                            {entry.name || 'Unnamed Entry'}
+                        </button>
+                    ))}
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+};
+
+const ListHeader: React.FC<{ label: string; icon: string; color: string; }> = ({ label, icon, color }) => (
+    <h3 className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${color} px-2 py-1 h-full`}>
+        <Icon name={icon} className="w-3.5 h-3.5" />
+        {label}
+    </h3>
+);
+
 
 const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   world,
@@ -423,11 +498,14 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   });
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const entryListRef = useRef<HTMLDivElement>(null);
   const [entrySearch, setEntrySearch] = useState('');
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
   const [includeAiCheck, setIncludeAiCheck] = useState(false);
   const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
+  const [recentEntryIds, setRecentEntryIds] = useState<string[]>([]);
+  const [isQuickJumpOpen, setIsQuickJumpOpen] = useState(false);
 
 
   useEffect(() => {
@@ -462,7 +540,17 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     }
     setIsValidationPanelOpen(false);
     setValidationIssues([]);
+    setRecentEntryIds([]);
   }, [world]);
+
+  useEffect(() => {
+      if (activeEntryId) {
+          setRecentEntryIds(prev => {
+              const newRecents = [activeEntryId, ...prev.filter(id => id !== activeEntryId)];
+              return newRecents.slice(0, 5); // Keep last 5
+          });
+      }
+  }, [activeEntryId]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -497,6 +585,13 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
       }),
     }));
   }, []);
+
+  const handleToggleBookmark = useCallback((entryId: string) => {
+    const entry = formData.entries?.find(e => e.id === entryId);
+    if (entry) {
+        handleEntryChange(entryId, 'isBookmarked', !entry.isBookmarked);
+    }
+  }, [formData.entries, handleEntryChange]);
 
   const handleAddNewEntry = useCallback(() => {
     const newEntry: WorldEntry = {
@@ -565,12 +660,16 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   }, [formData, onSave]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isValidationPanelOpen && !isCheckingConsistency) onClose();
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isValidationPanelOpen && !isCheckingConsistency && !isQuickJumpOpen) onClose();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsQuickJumpOpen(prev => !prev);
+      }
     };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isValidationPanelOpen, isCheckingConsistency]);
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [onClose, isValidationPanelOpen, isCheckingConsistency, isQuickJumpOpen]);
 
   const handleValidate = useCallback(async () => {
     const currentWorld = formData as World;
@@ -629,26 +728,60 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     );
   }, [formData.entries, entrySearch]);
 
-  const entriesByCategory = useMemo(() => {
+  const ITEM_HEIGHT = 36; // px
+
+  type ListItem =
+    | { type: 'header'; id: string; label: string; icon: string; color: string; }
+    | { type: 'entry'; data: WorldEntry };
+
+  const displayList = useMemo<ListItem[]>(() => {
+    const list: ListItem[] = [];
+    const bookmarked = filteredEntries.filter(e => e.isBookmarked);
+    const recent = recentEntryIds
+        .map(id => filteredEntries.find(e => e.id === id))
+        .filter((e): e is WorldEntry => !!e);
+    
+    const specialIds = new Set([...bookmarked.map(e => e.id), ...recent.map(e => e.id)]);
+    const mainEntries = filteredEntries.filter(e => !specialIds.has(e.id));
+    
     const UNCATEGORIZED = '(No Category)';
     const grouped: Record<string, WorldEntry[]> = {};
-    filteredEntries.forEach((entry) => {
-      const category = entry.category || UNCATEGORIZED;
-      if (!grouped[category]) grouped[category] = [];
-      grouped[category].push(entry);
+    mainEntries.forEach((entry) => {
+        const category = entry.category || UNCATEGORIZED;
+        if (!grouped[category]) grouped[category] = [];
+        grouped[category].push(entry);
     });
-    return Object.entries(grouped).sort((a, b) => {
-      if (a[0] === UNCATEGORIZED) return 1;
-      if (b[0] === UNCATEGORIZED) return -1;
-      const aIndex = isWorldEntryCategory(a[0])
-        ? categoryOptions.indexOf(a[0])
-        : -1;
-      const bIndex = isWorldEntryCategory(b[0])
-        ? categoryOptions.indexOf(b[0])
-        : -1;
-      return aIndex - bIndex;
-    });
-  }, [filteredEntries]);
+
+    if (bookmarked.length > 0) {
+        list.push({ type: 'header', id: 'header-bookmarked', label: 'Bookmarked', icon: 'pin', color: 'text-ember-400' });
+        bookmarked.forEach(entry => list.push({ type: 'entry', data: entry }));
+    }
+    if (recent.length > 0) {
+        list.push({ type: 'header', id: 'header-recent', label: 'Recent', icon: 'history', color: 'text-sky-400' });
+        recent.forEach(entry => list.push({ type: 'entry', data: entry }));
+    }
+
+    Object.entries(grouped)
+        .sort(([aCat], [bCat]) => {
+            if (aCat === UNCATEGORIZED) return 1;
+            if (bCat === UNCATEGORIZED) return -1;
+            const aIndex = isWorldEntryCategory(aCat) ? categoryOptions.indexOf(aCat) : -1;
+            const bIndex = isWorldEntryCategory(bCat) ? categoryOptions.indexOf(bCat) : -1;
+            return aIndex - bIndex;
+        })
+        .forEach(([category, entries]) => {
+            list.push({ type: 'header', id: `header-cat-${category}`, label: category, icon: categoryIcons[category as WorldEntryCategory] || 'book-open', color: 'text-slate-500' });
+            entries.forEach(entry => list.push({ type: 'entry', data: entry }));
+        });
+      
+    return list;
+  }, [filteredEntries, recentEntryIds]);
+
+  const { handleScroll, virtualItems, totalHeight } = useVirtualScroll({
+    items: displayList,
+    itemHeight: ITEM_HEIGHT,
+    containerRef: entryListRef,
+  });
 
   return (
     <>
@@ -668,9 +801,19 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
           className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col border border-slate-700"
           onClick={(e) => e.stopPropagation()}
         >
+          <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-2 text-xl font-bold font-display tracking-widest uppercase">
+                <span className="text-slate-400">Worlds</span>
+                <span className="text-slate-600">/</span>
+                <span className="text-crimson-400">{formData.name || '...'}</span>
+            </div>
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md">
+                <Icon name="close" />
+            </button>
+          </header>
           <form
             onSubmit={handleSubmit}
-            className="flex-1 flex flex-col overflow-hidden"
+            className="flex-1 flex flex-col overflow-hidden relative"
           >
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden">
               {/* Left Column: Navigation & Entry List */}
@@ -693,18 +836,25 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                       required
                     />
                   </div>
-                  <div className="relative">
-                    <Icon
-                      name="search"
-                      className="w-4 h-4 text-slate-500 absolute top-1/2 left-3 -translate-y-1/2"
-                    />
-                    <input
-                      type="text"
-                      value={entrySearch}
-                      onChange={(e) => setEntrySearch(e.target.value)}
-                      placeholder="Search entries..."
-                      className="w-full bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 pl-9 pr-3 text-sm"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Icon
+                        name="search"
+                        className="w-4 h-4 text-slate-500 absolute top-1/2 left-3 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        type="text"
+                        value={entrySearch}
+                        onChange={(e) => setEntrySearch(e.target.value)}
+                        placeholder="Search entries..."
+                        className="w-full bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 pl-9 pr-3 text-sm"
+                      />
+                    </div>
+                    <Tooltip content="Quick Jump (Ctrl+K)" position="top">
+                        <button type="button" onClick={() => setIsQuickJumpOpen(true)} className="p-2 text-slate-400 bg-slate-800/60 border-2 border-slate-700 rounded-lg hover:bg-slate-700/50">
+                           <Icon name="zap" className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
                   </div>
                   <button
                     type="button"
@@ -714,40 +864,32 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                     <Icon name="add" className="w-4 h-4" /> New Lore Entry
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                  {entriesByCategory.length > 0 ? (
-                    entriesByCategory.map(([category, entries]) => (
-                      <div key={category} className="mb-3">
-                        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 px-2 py-1">
-                          <Icon
-                            name={
-                              categoryIcons[category as WorldEntryCategory] ||
-                              'book-open'
-                            }
-                            className="w-3.5 h-3.5"
-                          />
-                          {category}
-                        </h3>
-                        <div className="space-y-1 mt-1">
-                          {entries.map((entry) => (
-                            <EntryListItem
-                              key={entry.id}
-                              entry={entry}
-                              isActive={activeEntryId === entry.id}
-                              onSelect={handleSelectEntry}
-                              onDelete={handleDeleteEntry}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-slate-600 p-8">
-                      <Icon name="book-open" className="w-12 h-12 mx-auto" />
-                      <p className="mt-2 text-sm">No lore entries yet.</p>
-                    </div>
-                  )}
+                
+                <div ref={entryListRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar p-2 relative">
+                    {displayList.length > 0 ? (
+                        <>
+                            <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }} />
+                            {virtualItems.map(({ data: item, style }) => (
+                                <div key={item.type === 'entry' ? item.data.id : item.id} style={style}>
+                                    {item.type === 'header' ? (
+                                        <ListHeader label={item.label} icon={item.icon} color={item.color} />
+                                    ) : (
+                                        <EntryListItem
+                                            entry={item.data}
+                                            isActive={activeEntryId === item.data.id}
+                                            onSelect={handleSelectEntry}
+                                            onDelete={handleDeleteEntry}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </>
+                    ) : (
+                         <div className="text-center text-slate-600 p-8">
+                            <Icon name={entrySearch ? "search" : "book-open"} className="w-12 h-12 mx-auto" />
+                            <p className="mt-2 text-sm">{entrySearch ? "No entries match your search." : "No lore entries yet."}</p>
+                         </div>
+                    )}
                 </div>
               </aside>
 
@@ -755,7 +897,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
               <main className="w-full flex flex-col">
                 {activeEntry ? (
                   <>
-                    <div className="p-4 border-b border-slate-800 shrink-0">
+                    <div className="p-4 border-b border-slate-800 shrink-0 flex items-center gap-2">
                       <input
                         type="text"
                         value={activeEntry.name || ''}
@@ -765,6 +907,11 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                         className="w-full bg-transparent text-lg font-bold border-0 focus:ring-0 p-0"
                         placeholder="Entry Name"
                       />
+                       <Tooltip content={activeEntry.isBookmarked ? "Unbookmark" : "Bookmark"} position="top">
+                           <button type="button" onClick={() => handleToggleBookmark(activeEntry.id)} className={`p-2 rounded-md hover:bg-slate-700/50 transition-colors ${activeEntry.isBookmarked ? 'text-ember-400' : 'text-slate-400'}`}>
+                               <Icon name="pin" className="w-5 h-5" />
+                           </button>
+                       </Tooltip>
                     </div>
                     <div className="flex-1 overflow-y-auto relative">
                       <textarea
@@ -849,6 +996,16 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                 </button>
               </div>
             </footer>
+            <AnimatePresence>
+                {isQuickJumpOpen && <QuickJumpModal 
+                    entries={formData.entries || []}
+                    onSelect={(id) => {
+                        setActiveEntryId(id);
+                        setIsQuickJumpOpen(false);
+                    }}
+                    onClose={() => setIsQuickJumpOpen(false)}
+                />}
+            </AnimatePresence>
           </form>
         </motion.div>
       </motion.div>

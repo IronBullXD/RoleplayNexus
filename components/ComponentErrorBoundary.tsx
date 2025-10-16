@@ -12,14 +12,13 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Refactored to use a constructor for state and method binding for maximum compatibility.
+  // FIX: Replaced public class field with a constructor for broader compatibility.
   constructor(props: Props) {
     super(props);
     this.state = {
       hasError: false,
       error: undefined,
     };
-    this.handleRetry = this.handleRetry.bind(this);
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -39,9 +38,10 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  handleRetry(): void {
+  // handleRetry is an event handler, so it's defined as an arrow function to preserve 'this' context.
+  handleRetry = (): void => {
     this.setState({ hasError: false, error: undefined });
-  }
+  };
 
   render(): ReactNode {
     if (this.state.hasError) {

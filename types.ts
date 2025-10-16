@@ -68,6 +68,7 @@ export interface WorldEntry {
   enabled: boolean;
   category?: WorldEntryCategory;
   isAlwaysActive?: boolean;
+  isBookmarked?: boolean;
 }
 
 export interface World {
@@ -135,13 +136,31 @@ export interface GroupTurnAction {
   content: string;
 }
 
+export type ValidationType =
+  | 'DuplicateKeyword'
+  | 'UnusedEntry'
+  | 'MissingName'
+  | 'ShortContent'
+  | 'OverlappingKeyword'
+  | 'Contradiction'
+  | 'CircularReference'
+  | 'OrphanedEntry'
+  | 'InconsistentFormatting'
+  | 'MissingKeywords'
+  | 'DuplicateContent';
+
 export interface ValidationIssue {
-  type: 'DuplicateKeyword' | 'UnusedEntry' | 'MissingName' | 'ShortContent' | 'OverlappingKeyword' | 'Contradiction';
+  type: ValidationType;
   severity: 'warning' | 'info' | 'error';
   message: string;
   entryIds: string[];
-  // e.g., the duplicate keyword itself, or the overlapping keywords
-  relatedData?: { keyword?: string, otherKeyword?: string, otherEntryNames?: string[] };
+  relatedData?: {
+    keyword?: string;
+    otherKeyword?: string;
+    otherEntryNames?: string[];
+    path?: string[];
+    duplicateOf?: string;
+  };
 }
 
 export interface ThemeConfig {

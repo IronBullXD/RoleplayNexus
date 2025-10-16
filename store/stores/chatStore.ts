@@ -84,11 +84,10 @@ export const useChatStore = create<ChatStore>()(
         const remainingMessages = currentMessages.slice(sliceIndex);
         
         try {
+          // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
           const { provider, apiKeys, models } = settings;
-          // FIX: Explicitly type the provider to prevent it from being widened to `string`.
-          const currentProvider: LLMProvider = provider;
-          const model = models?.[currentProvider] || '';
-          const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
+          const model = models?.[provider] || '';
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
           if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
@@ -140,11 +139,11 @@ export const useChatStore = create<ChatStore>()(
             const character = characters.find(c => c.id === activeCharacterId);
             if (!character) throw new Error("Active character not found");
 
-            const { provider, apiKeys, models, systemPrompt } = settings;
-            // FIX: Explicitly type the provider to prevent it from being widened to `string`.
-            const currentProvider: LLMProvider = provider;
-            const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
-            const model = models?.[currentProvider] || '';
+            // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
+            const { apiKeys, models } = settings;
+            const provider = settings.provider;
+            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+            const model = models?.[provider] || '';
             const world = worlds.find(w => w.id === session.worldId);
             const worldId = world?.id || '';
 
@@ -153,7 +152,7 @@ export const useChatStore = create<ChatStore>()(
                 messages: messagesToProcess,
                 characterPersona: character.persona,
                 userPersona,
-                globalSystemPrompt: systemPrompt,
+                globalSystemPrompt: settings.systemPrompt,
                 world: world || null,
                 temperature: session.temperature ?? settings.temperature,
                 prefill: isContinuation ? '' : settings.responsePrefill,
@@ -237,11 +236,11 @@ export const useChatStore = create<ChatStore>()(
           
           const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
       
-          const { provider, apiKeys, models, systemPrompt } = settings;
-          // FIX: Explicitly type the provider to prevent it from being widened to `string`.
-          const currentProvider: LLMProvider = provider;
-          const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
-          const model = models?.[currentProvider] || '';
+          // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
+          const { apiKeys, models } = settings;
+          const provider = settings.provider;
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          const model = models?.[provider] || '';
           const world = worlds.find(w => w.id === session.worldId);
           const worldId = world?.id || '';
       
@@ -251,7 +250,7 @@ export const useChatStore = create<ChatStore>()(
             sessionCharacters: sessionCharacters.map(c => ({ name: c.name, persona: c.persona })),
             scenario: session.scenario,
             userPersona,
-            globalSystemPrompt: systemPrompt,
+            globalSystemPrompt: settings.systemPrompt,
             world: world || null,
             temperature: session.temperature ?? settings.temperature,
             contextSize: session.contextSize ?? settings.contextSize,

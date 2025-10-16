@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ValidationIssue, WorldEntry } from '../types';
+import { ValidationIssue, WorldEntry, ValidationType } from '../types';
 import { Icon } from './Icon';
 import { motion } from 'framer-motion';
 
@@ -11,13 +11,18 @@ interface ValidationResultsPanelProps {
   entries: WorldEntry[];
 }
 
-const issueMetadata = {
+const issueMetadata: Record<ValidationType, { icon: string; color: string; title: string }> = {
   DuplicateKeyword: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Duplicate Keywords' },
   UnusedEntry: { icon: 'lightbulb', color: 'text-sky-400', title: 'Unused Entries' },
   MissingName: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Missing Entry Names' },
   ShortContent: { icon: 'lightbulb', color: 'text-sky-400', title: 'Short Content' },
   OverlappingKeyword: { icon: 'lightbulb', color: 'text-sky-400', title: 'Overlapping Keywords' },
   Contradiction: { icon: 'brain', color: 'text-purple-400', title: 'AI-Detected Inconsistencies' },
+  CircularReference: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Circular References' },
+  OrphanedEntry: { icon: 'lightbulb', color: 'text-sky-400', title: 'Orphaned Entries' },
+  InconsistentFormatting: { icon: 'lightbulb', color: 'text-sky-400', title: 'Inconsistent Formatting' },
+  MissingKeywords: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Potentially Missing Keywords' },
+  DuplicateContent: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Duplicate Content' },
 };
 
 const ValidationResultsPanel: React.FC<ValidationResultsPanelProps> = ({ issues, onClose, onSelectEntry, worldName, entries }) => {

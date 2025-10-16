@@ -38,25 +38,77 @@ export function isApiError(error: unknown): error is ApiError {
 // Per guidelines, Gemini API key MUST come from the environment.
 const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Module-level cache for pre-computed world indices with LRU-style cleanup.
-const MAX_CACHE_SIZE = 50;
-const worldIndexCache = new Map<string, { index: any; entriesJSON: string; lastAccessed: number }>();
+// --- Enhanced World Index Caching ---
+const MAX_CACHE_SIZE = 100; // Increased size for more efficient cache
+interface WorldCacheEntry {
+  index: any;
+  version: string;
+  lastAccessed: number;
+  frequency: number;
+  size: number; // Estimated size in bytes
+}
+const worldIndexCache = new Map<string, WorldCacheEntry>();
 
 /**
- * Cleans up the world index cache if it exceeds the maximum size,
- * removing the least recently used items.
+ * Cleans the cache using a score-based eviction policy (considering age and frequency)
+ * when it exceeds the maximum size.
  */
 function cleanupCache(): void {
-  if (worldIndexCache.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(worldIndexCache.entries());
-    // Sort by lastAccessed timestamp, oldest first
-    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-    // Remove 25% of the cache
-    const toRemoveCount = Math.floor(MAX_CACHE_SIZE * 0.25);
-    for (let i = 0; i < toRemoveCount; i++) {
-      worldIndexCache.delete(entries[i][0]);
+  while (worldIndexCache.size > MAX_CACHE_SIZE) {
+    let worstEntryKey: string | null = null;
+    let maxScore = -Infinity;
+
+    // Scoring system: higher score = better candidate for eviction.
+    // Score penalizes old, infrequently used items.
+    const now = Date.now();
+    for (const [key, entry] of worldIndexCache.entries()) {
+      const ageInHours = (now - entry.lastAccessed) / (1000 * 60 * 60);
+      const score = ageInHours / entry.frequency;
+      if (score > maxScore) {
+        maxScore = score;
+        worstEntryKey = key;
+      }
     }
-    logger.log(`Cleaned up world index cache. Removed ${toRemoveCount} items.`);
+
+    if (worstEntryKey) {
+      worldIndexCache.delete(worstEntryKey);
+      logger.log(`Cache eviction: Removed entry for world ID ${worstEntryKey}`, {
+        score: maxScore.toFixed(2),
+        newSize: worldIndexCache.size,
+      });
+    } else {
+      // Fallback: remove the first item if scoring fails
+      const oldestKey = worldIndexCache.keys().next().value;
+      if (oldestKey) worldIndexCache.delete(oldestKey);
+      else break; // Cache is empty
+    }
+  }
+}
+
+/**
+ * Generates a lightweight version string for a world's entries to detect changes
+ * without expensive serialization. Based on entry count and a checksum of content lengths.
+ * @param entries The array of world entries.
+ * @returns A version string.
+ */
+function generateWorldVersion(entries: WorldEntry[]): string {
+  if (!entries || entries.length === 0) return '0-0';
+  const checksum = entries.reduce((acc, e) => acc + (e.content?.length || 0) + (e.keys?.length || 0), 0);
+  return `${entries.length}-${checksum}`;
+}
+
+/**
+ * Proactively builds and caches indices for a given list of worlds.
+ * @param worlds An array of World objects to warm the cache with.
+ */
+export function warmWorldCache(worlds: World[]) {
+  if (!worlds || worlds.length === 0) return;
+  logger.log('Warming world cache for specified worlds.', { worldCount: worlds.length, worldNames: worlds.map(w => w.name) });
+  for (const world of worlds) {
+    if (world) {
+      // This will build the index if it's not present or outdated.
+      getOrBuildWorldIndex(world);
+    }
   }
 }
 
@@ -169,19 +221,18 @@ const stem = (word: string): string => {
  * @returns A pre-computed index for the world.
  */
 function getOrBuildWorldIndex(world: World) {
-  // Use a JSON string of entries as a cheap but effective cache invalidation key.
-  const entriesJSON = JSON.stringify(world.entries);
+  const version = generateWorldVersion(world.entries);
   const cached = worldIndexCache.get(world.id);
 
-  if (cached && cached.entriesJSON === entriesJSON) {
-    logger.log('Using cached world index.', { worldId: world.id });
-    cached.lastAccessed = Date.now(); // Update last accessed timestamp
+  if (cached && cached.version === version) {
+    logger.log('Using cached world index.', { worldId: world.id, frequency: cached.frequency + 1 });
+    cached.lastAccessed = Date.now();
+    cached.frequency += 1;
     return cached.index;
   }
 
-  logger.log('Building new world index.', { worldId: world.id });
+  logger.log('Building new world index.', { worldId: world.id, reason: cached ? 'version mismatch' : 'not cached' });
 
-  // Clean up cache before adding a new entry to prevent exceeding the limit.
   cleanupCache();
 
   const entryIdToEntryMap = new Map<string, WorldEntry>();
@@ -229,7 +280,14 @@ function getOrBuildWorldIndex(world: World) {
     stem,
     entryIdToEntryMap,
   };
-  worldIndexCache.set(world.id, { index, entriesJSON, lastAccessed: Date.now() });
+  const estimatedSize = JSON.stringify(index).length; // Simple size estimation
+  worldIndexCache.set(world.id, {
+    index,
+    version,
+    lastAccessed: Date.now(),
+    frequency: 1,
+    size: estimatedSize,
+  });
   return index;
 }
 
