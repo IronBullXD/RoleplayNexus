@@ -12,7 +12,7 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Replaced public class field with a constructor for broader compatibility.
+  // FIX: Restore constructor for state initialization to resolve TS type inference issues with 'this.props' and 'this.setState'.
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -38,7 +38,6 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  // handleRetry is an event handler, so it's defined as an arrow function to preserve 'this' context.
   handleRetry = (): void => {
     this.setState({ hasError: false, error: undefined });
   };

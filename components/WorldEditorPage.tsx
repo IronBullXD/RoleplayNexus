@@ -73,11 +73,6 @@ const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
         {entry.name || 'Unnamed Entry'}
       </span>
       <div className="flex items-center">
-        {entry.isBookmarked && (
-          <Tooltip content="Bookmarked" position="top">
-            <Icon name="pin" className="w-3.5 h-3.5 text-ember-400 mr-2" />
-          </Tooltip>
-        )}
         {!entry.enabled && (
           <Tooltip content="Disabled" position="top">
             <Icon
@@ -87,6 +82,7 @@ const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
           </Tooltip>
         )}
         <button
+          type="button"
           onClick={handleDelete}
           className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
           aria-label={`Delete entry ${entry.name || 'Unnamed Entry'}`}
@@ -586,13 +582,6 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     }));
   }, []);
 
-  const handleToggleBookmark = useCallback((entryId: string) => {
-    const entry = formData.entries?.find(e => e.id === entryId);
-    if (entry) {
-        handleEntryChange(entryId, 'isBookmarked', !entry.isBookmarked);
-    }
-  }, [formData.entries, handleEntryChange]);
-
   const handleAddNewEntry = useCallback(() => {
     const newEntry: WorldEntry = {
       id: crypto.randomUUID(),
@@ -736,12 +725,11 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
 
   const displayList = useMemo<ListItem[]>(() => {
     const list: ListItem[] = [];
-    const bookmarked = filteredEntries.filter(e => e.isBookmarked);
     const recent = recentEntryIds
         .map(id => filteredEntries.find(e => e.id === id))
         .filter((e): e is WorldEntry => !!e);
     
-    const specialIds = new Set([...bookmarked.map(e => e.id), ...recent.map(e => e.id)]);
+    const specialIds = new Set(recent.map(e => e.id));
     const mainEntries = filteredEntries.filter(e => !specialIds.has(e.id));
     
     const UNCATEGORIZED = '(No Category)';
@@ -752,10 +740,6 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
         grouped[category].push(entry);
     });
 
-    if (bookmarked.length > 0) {
-        list.push({ type: 'header', id: 'header-bookmarked', label: 'Bookmarked', icon: 'pin', color: 'text-ember-400' });
-        bookmarked.forEach(entry => list.push({ type: 'entry', data: entry }));
-    }
     if (recent.length > 0) {
         list.push({ type: 'header', id: 'header-recent', label: 'Recent', icon: 'history', color: 'text-sky-400' });
         recent.forEach(entry => list.push({ type: 'entry', data: entry }));
@@ -907,11 +891,6 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                         className="w-full bg-transparent text-lg font-bold border-0 focus:ring-0 p-0"
                         placeholder="Entry Name"
                       />
-                       <Tooltip content={activeEntry.isBookmarked ? "Unbookmark" : "Bookmark"} position="top">
-                           <button type="button" onClick={() => handleToggleBookmark(activeEntry.id)} className={`p-2 rounded-md hover:bg-slate-700/50 transition-colors ${activeEntry.isBookmarked ? 'text-ember-400' : 'text-slate-400'}`}>
-                               <Icon name="pin" className="w-5 h-5" />
-                           </button>
-                       </Tooltip>
                     </div>
                     <div className="flex-1 overflow-y-auto relative">
                       <textarea

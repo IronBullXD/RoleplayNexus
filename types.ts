@@ -68,7 +68,6 @@ export interface WorldEntry {
   enabled: boolean;
   category?: WorldEntryCategory;
   isAlwaysActive?: boolean;
-  isBookmarked?: boolean;
 }
 
 export interface World {

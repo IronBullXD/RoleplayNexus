@@ -10,7 +10,7 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  // FIX: Replaced public class field with a constructor for broader compatibility.
+  // FIX: Restore constructor for state initialization to resolve TS type inference issues with 'this.props'.
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {

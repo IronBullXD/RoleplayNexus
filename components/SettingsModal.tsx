@@ -289,7 +289,7 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
                   apiKeys: { ...p.apiKeys, [provider]: e.target.value },
                 }))
               }
-              className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600"
+              className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3 placeholder:text-slate-600"
               placeholder="Enter your API key"
             />
           </FormField>
@@ -305,7 +305,7 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
                 models: { ...p.models, [provider]: e.target.value },
               }))
             }
-            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600"
+            className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3 placeholder:text-slate-600"
             placeholder={
               isGemini
                 ? 'e.g., gemini-2.5-flash'
@@ -465,7 +465,7 @@ function ThinkingEngineSection({
           step="1000"
           value={settings.thinkingTimeout}
           onChange={(e) => setSettings(p => ({ ...p, thinkingTimeout: parseInt(e.target.value, 10) || 15000 }))}
-          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3"
+          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3"
         />
       </FormField>
     </SettingsSectionPanel>

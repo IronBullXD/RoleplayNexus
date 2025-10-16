@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { Character } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
+import { useCharacterStore } from '../store/stores/characterStore';
+import { useChatStore } from '../store/stores/chatStore';
 
 interface GroupChatSetupProps {
   onBack: () => void;
 }
 
 const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
-  const { characters, createGroupChat } = useAppStore();
+  const characters = useCharacterStore((state) => state.characters);
+  const createGroupChat = useChatStore((state) => state.createGroupChat);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [scenario, setScenario] = useState('');
 
@@ -57,7 +59,7 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
                 onClick={() => handleToggleCharacter(char.id)}
                 className={`relative rounded-lg overflow-hidden aspect-square focus:outline-none transition-all duration-200 group ${
                   selectedIds.has(char.id)
-                    ? 'ring-4 ring-sky-500 scale-95'
+                    ? 'ring-4 ring-crimson-500 scale-95'
                     : 'ring-2 ring-transparent hover:ring-slate-600'
                 }`}
               >
@@ -77,7 +79,7 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
                   {char.name}
                 </p>
                 {selectedIds.has(char.id) && (
-                  <div className="absolute top-2 right-2 w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center border-2 border-slate-950">
+                  <div className="absolute top-2 right-2 w-6 h-6 bg-crimson-500 rounded-full flex items-center justify-center border-2 border-slate-950">
                     <Icon name="checkmark" className="w-4 h-4 text-white" />
                   </div>
                 )}
@@ -97,7 +99,7 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
             value={scenario}
             onChange={(e) => setScenario(e.target.value)}
             rows={5}
-            className="mt-4 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
+            className="mt-4 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
             placeholder="e.g., You are all gathered in a dimly lit tavern, seeking shelter from a raging storm..."
           />
         </div>
@@ -107,7 +109,7 @@ const GroupChatSetup: React.FC<GroupChatSetupProps> = ({ onBack }) => {
         <button
           onClick={handleSubmit}
           disabled={!isValid}
-          className="px-6 py-2.5 text-base font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors border border-sky-400/50 shadow-md shadow-sky-900/50"
+          className="px-6 py-2.5 text-base font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50"
         >
           Start Chat
         </button>

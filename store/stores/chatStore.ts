@@ -84,10 +84,9 @@ export const useChatStore = create<ChatStore>()(
         const remainingMessages = currentMessages.slice(sliceIndex);
         
         try {
-          // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
           const { provider, apiKeys, models } = settings;
           const model = models?.[provider] || '';
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
           if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
@@ -139,10 +138,9 @@ export const useChatStore = create<ChatStore>()(
             const character = characters.find(c => c.id === activeCharacterId);
             if (!character) throw new Error("Active character not found");
 
-            // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
-            const { apiKeys, models } = settings;
-            const provider = settings.provider;
-            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+            const { provider, apiKeys, models } = settings;
+            // FIX: Restore type assertion. The type of 'provider' can be broadened to 'unknown' after rehydration from storage.
+            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
             const model = models?.[provider] || '';
             const world = worlds.find(w => w.id === session.worldId);
             const worldId = world?.id || '';
@@ -236,10 +234,9 @@ export const useChatStore = create<ChatStore>()(
           
           const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
       
-          // FIX: Consistently use the 'provider' variable for indexing to ensure correct type inference.
-          const { apiKeys, models } = settings;
-          const provider = settings.provider;
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          const { provider, apiKeys, models } = settings;
+          // FIX: Restore type assertion. The type of 'provider' can be broadened to 'unknown' after rehydration from storage.
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
           const model = models?.[provider] || '';
           const world = worlds.find(w => w.id === session.worldId);
           const worldId = world?.id || '';
