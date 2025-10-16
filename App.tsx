@@ -47,7 +47,7 @@ function App() {
   const userPersona = useSettingsStore(state => state.userPersona);
   const worlds = useWorldStore(state => state.worlds);
   const characters = useCharacterStore(state => state.characters);
-  const getAppState = useAppStateForDebug;
+  const appState = useAppStateForDebug();
   const { sessions, groupSessions, messages } = useChatStore();
 
   useEffect(() => {
@@ -247,7 +247,7 @@ function App() {
             <ComponentErrorBoundary componentName="Debug Window Modal">
               <DebugWindow
                 onClose={() => closeModal('debug')}
-                appState={getAppState()}
+                appState={appState}
               />
             </ComponentErrorBoundary>
           </Suspense>

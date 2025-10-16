@@ -85,9 +85,11 @@ export const useChatStore = create<ChatStore>()(
         
         try {
           const { provider, apiKeys, models } = settings;
-          const model = models?.[provider] || '';
+          // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
+          const model = models?.[provider as LLMProvider] || '';
           const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-          if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
+          // FIX: Add type assertion for `provider` to satisfy the function signature and prevent type errors.
+          if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider as LLMProvider));
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
           const sysMsg: Message = { id: crypto.randomUUID(), role: 'system', content: '[System: Distant memories were summarized to preserve context.]', timestamp: Date.now() };
@@ -139,9 +141,9 @@ export const useChatStore = create<ChatStore>()(
             if (!character) throw new Error("Active character not found");
 
             const { provider, apiKeys, models } = settings;
-            // FIX: Restore type assertion. The type of 'provider' can be broadened to 'unknown' after rehydration from storage.
+            // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
             const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-            const model = models?.[provider] || '';
+            const model = models?.[provider as LLMProvider] || '';
             const world = worlds.find(w => w.id === session.worldId);
             const worldId = world?.id || '';
 
@@ -235,9 +237,9 @@ export const useChatStore = create<ChatStore>()(
           const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
       
           const { provider, apiKeys, models } = settings;
-          // FIX: Restore type assertion. The type of 'provider' can be broadened to 'unknown' after rehydration from storage.
+          // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
           const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-          const model = models?.[provider] || '';
+          const model = models?.[provider as LLMProvider] || '';
           const world = worlds.find(w => w.id === session.worldId);
           const worldId = world?.id || '';
       
