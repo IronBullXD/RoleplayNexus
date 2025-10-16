@@ -1,4 +1,4 @@
-import { Character, Settings, LLMProvider, Persona } from './types';
+import { Character, Settings, LLMProvider, Persona, ThinkingDepth } from './types';
 
 export const GM_CHARACTER_ID = 'system-gm';
 
@@ -92,6 +92,10 @@ export const DEFAULT_SETTINGS: Settings = {
   maxOutputTokens: 2048,
   temperature: DEFAULT_TEMPERATURE,
   worldId: null,
+  thinkingEnabled: false,
+  showThinking: true,
+  thinkingDepth: ThinkingDepth.MEDIUM,
+  thinkingTimeout: 15000,
 };
 
 export const API_ENDPOINTS = {

@@ -31,6 +31,7 @@ import ChatMessageSkeleton from './ChatMessageSkeleton';
 import { AnimatePresence } from 'framer-motion';
 import { findRelevantEntries } from '../services/llmService';
 import SuggestionsBar from './SuggestionsBar';
+import ThinkingProcessDisplay from './ThinkingProcessDisplay';
 
 interface ChatWindowProps {
   onNavigateToHistory: () => void;
@@ -63,6 +64,7 @@ interface ChatMessageProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   world: World | null;
+  showThinking: boolean;
 }
 
 const ChatMessage = React.memo(function ChatMessage({
@@ -81,6 +83,7 @@ const ChatMessage = React.memo(function ChatMessage({
   onSaveEdit,
   onCancelEdit,
   world,
+  showThinking,
 }: ChatMessageProps) {
   if (message.role === 'system') {
     return <SystemMessage message={message} />;
@@ -147,7 +150,7 @@ const ChatMessage = React.memo(function ChatMessage({
               : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
           }`}
         >
-          {!isEditing && (
+          {!isEditing && !message.isThinking && (
             <div
               className={`absolute flex items-center gap-0.5 p-1 bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
                 isUser ? 'left-4 -top-4' : 'right-4 -top-4'
@@ -230,6 +233,15 @@ const ChatMessage = React.memo(function ChatMessage({
                 </button>
               </div>
             </div>
+          ) : message.isThinking ? (
+             showThinking && message.thinkingProcess && message.thinkingProcess.length > 0 ? (
+                 <ThinkingProcessDisplay steps={message.thinkingProcess} />
+             ) : (
+                <div className="flex items-center gap-2 text-slate-400">
+                    <Icon name="brain" className="w-4 h-4 animate-pulse" />
+                    <span className="text-sm font-semibold">Thinking...</span>
+                </div>
+             )
           ) : (
             <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
               <SimpleMarkdown text={message.content} world={world} />
@@ -281,6 +293,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     worlds,
     resetChatView,
     newSession,
+    setActiveSessionId,
     setSessionWorld,
     setSessionTemperature,
     setSessionContextSize,
@@ -293,6 +306,8 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     sendMessage,
     continueGeneration,
     stopGeneration,
+    isLoading,
+    error,
   } = useAppStore();
 
   const character = useMemo(
@@ -308,9 +323,6 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     () => worlds.find((w) => w.id === session?.worldId),
     [worlds, session?.worldId],
   );
-
-  const isLoading = useAppStore((state) => state.isLoading);
-  const error = useAppStore((state) => state.error);
 
   const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<WorldEntry[]>([]);
@@ -443,11 +455,20 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     return lastMsg?.timestamp;
   }, [messages]);
 
+  const handleNewChat = useCallback(() => {
+    if (character?.id) {
+      const newSessionId = newSession(character.id);
+      if (newSessionId) {
+        setActiveSessionId(newSessionId);
+      }
+    }
+  }, [character, newSession, setActiveSessionId]);
+
   if (!character || !session) return null;
 
   const lastMessage = messages[messages.length - 1];
   const isReceiving = isLoading && lastMessage?.role === 'assistant';
-  const showTypingIndicator = isLoading && !isReceiving;
+  const showTypingIndicator = isLoading && !isReceiving && !lastMessage?.isThinking;
   const canSubmit = !!input.trim();
   const canContinue =
     !canSubmit &&
@@ -489,11 +510,11 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <IconButton icon="new-chat" label="New Chat" onClick={() => character.id && newSession(character.id)} />
+          <IconButton icon="new-chat" label="New Chat" onClick={handleNewChat} />
           <IconButton
             icon="history"
             label="Chat History"
-            onClick={onNavigateToHistory}
+            onClick={() => onNavigateToHistory()}
           />
           <ChatSettingsPopover
             settings={{
@@ -505,7 +526,6 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
               memoryEnabled: session.memoryEnabled ?? false,
             }}
             worlds={worlds}
-// FIX: Explicitly pass `false` for isGroup parameter to match function signature and prevent type errors.
             onSetWorld={(worldId) => activeSessionId && setSessionWorld(activeSessionId, worldId, false)}
             onSetTemperature={(temp) => activeSessionId && setSessionTemperature(activeSessionId, temp, false)}
             onSetContextSize={(size) => activeSessionId && setSessionContextSize(activeSessionId, size, false)}
@@ -523,7 +543,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
           {hasMore && (
             <div className="text-center my-4 animate-fade-in">
               <button
-                onClick={loadMore}
+                onClick={() => loadMore()}
                 className="px-4 py-2 text-sm font-semibold text-crimson-300 bg-crimson-900/50 border border-crimson-700/70 rounded-full hover:bg-crimson-800/50 transition-colors shadow-inner shadow-crimson-900/50"
               >
                 Show Older Messages
@@ -554,6 +574,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 world={msg.role === 'assistant' ? activeWorld : null}
+                showThinking={settings.showThinking}
               />
             </React.Fragment>
           ))}
@@ -593,7 +614,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
               {isLoading ? (
                 <button
                   type="button"
-                  onClick={stopGeneration}
+                  onClick={() => stopGeneration()}
                   className="w-10 h-10 flex items-center justify-center rounded-md bg-ember-600 text-white hover:bg-ember-500 transition-colors shadow-lg"
                   aria-label="Stop generation"
                 >

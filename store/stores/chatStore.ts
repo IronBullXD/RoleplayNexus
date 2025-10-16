@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Character, Message, ChatSession, GroupChatSession, LLMProvider, GroupTurnAction } from '../../types';
+import { Character, Message, ChatSession, GroupChatSession, LLMProvider, GroupTurnAction, ThinkingStep } from '../../types';
 import { useUIStore } from './uiStore';
 import { useSettingsStore } from './settingsStore';
 import { useWorldStore } from './worldStore';
 import { useCharacterStore } from './characterStore';
 import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages } from '../../services/llmService';
+import { generateResponseWithThinking } from '../../services/thinkingService';
 import { logger } from '../../services/logger';
 
 // --- Types & Interfaces ---
@@ -31,7 +32,9 @@ export interface ChatActions {
   sendGroupMessage: (content: string) => Promise<void>;
   editGroupMessage: (sessionId: string, messageId: string, newContent: string) => void;
   deleteGroupMessage: (sessionId: string, messageId: string) => void;
+  // FIX: Updated `regenerateGroupResponse` to accept a `sessionId` for consistency and to resolve argument mismatch errors.
   regenerateGroupResponse: (sessionId: string) => Promise<void>;
+  // FIX: Updated `continueGroupGeneration` to accept a `sessionId` for consistency and to resolve argument mismatch errors.
   continueGroupGeneration: (sessionId: string) => Promise<void>;
   forkGroupChat: (sessionId: string, messageId: string) => string;
   createGroupChat: (characterIds: string[], scenario: string) => string;
@@ -96,7 +99,7 @@ export const useChatStore = create<ChatStore>()(
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
           const sysMsg: Message = { id: crypto.randomUUID(), role: 'system', content: '[System: Distant memories were summarized to preserve context.]', timestamp: Date.now() };
-          set(state => ({ messages: { ...state.messages, [sysMsg.id]: sysMsg } }));
+          set((state: ChatStore) => ({ messages: { ...state.messages, [sysMsg.id]: sysMsg } }));
           
           return { messages: [sysMsg, ...remainingMessages], summary: newSummary };
         } catch (err) {
@@ -122,15 +125,21 @@ export const useChatStore = create<ChatStore>()(
             setIsLoading(false);
             return;
         }
+        
+        const { settings, userPersona } = useSettingsStore.getState();
+        const useThinking = settings.thinkingEnabled && !isContinuation;
 
-        const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', timestamp: Date.now() };
-        set(state => ({
-            messages: { ...state.messages, [assistantMessage.id]: assistantMessage },
-            sessions: { ...state.sessions, [sessionId]: { ...session, messageIds: [...session.messageIds, assistantMessage.id] } }
-        }));
+        const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', timestamp: Date.now(), isThinking: useThinking, thinkingProcess: [] };
+        set((state: ChatStore) => {
+            const currentSession = state.sessions[sessionId];
+            if (!currentSession) return state;
+            return {
+                messages: { ...state.messages, [assistantMessage.id]: assistantMessage },
+                sessions: { ...state.sessions, [sessionId]: { ...currentSession, messageIds: [...currentSession.messageIds, assistantMessage.id] } }
+            };
+        });
 
         try {
-            const { settings, userPersona } = useSettingsStore.getState();
             const { worlds, worldEntryInteractions } = useWorldStore.getState();
             const { characters } = useCharacterStore.getState();
             const { activeCharacterId } = useUIStore.getState();
@@ -141,8 +150,9 @@ export const useChatStore = create<ChatStore>()(
             const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
             const model = models?.[provider] || '';
             const world = worlds.find(w => w.id === session.worldId);
+            const worldId = world?.id || '';
 
-            const stream = getChatCompletionStream({
+            const completionParams = {
                 provider, apiKey, model,
                 messages: messagesToProcess,
                 characterPersona: character.persona,
@@ -156,27 +166,149 @@ export const useChatStore = create<ChatStore>()(
                 maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens,
                 memorySummary: session.memorySummary,
                 characterName: character.name,
-                interactionData: worldEntryInteractions[world?.id || '']
-            });
+                interactionData: worldId ? worldEntryInteractions[worldId] : undefined,
+                settings, // Pass all settings for thinking service
+            };
+
+            const stream = useThinking ? generateResponseWithThinking(completionParams) : getChatCompletionStream(completionParams);
 
             let accumulatedText = '';
             let lastRenderTime = 0;
-            for await (const chunk of stream) {
-                accumulatedText += chunk;
-                if (Date.now() - lastRenderTime > RENDER_INTERVAL) {
-                    set(state => ({ messages: { ...state.messages, [assistantMessage.id]: { ...assistantMessage, content: accumulatedText } }}));
-                    lastRenderTime = Date.now();
+            for await (const result of stream) {
+                const isThinkingResult = typeof result === 'object';
+                if (isThinkingResult && result.type === 'step') {
+                    set((state: ChatStore) => {
+                        const msg = state.messages[assistantMessage.id];
+                        if (!msg) return state;
+                        return { messages: { ...state.messages, [assistantMessage.id]: { ...msg, thinkingProcess: [...(msg.thinkingProcess || []), result.payload as ThinkingStep] } }};
+                    });
+                } else if (isThinkingResult && result.type === 'start_response') {
+                     set((state: ChatStore) => {
+                        const msg = state.messages[assistantMessage.id];
+                        if (!msg) return state;
+                        return { messages: { ...state.messages, [assistantMessage.id]: { ...msg, isThinking: false } }};
+                    });
+                } else {
+                    const chunk = isThinkingResult ? (result.payload as string) : (result as string);
+                    accumulatedText += chunk;
+                    if (Date.now() - lastRenderTime > RENDER_INTERVAL) {
+                        set((state: ChatStore) => {
+                            const currentMessage = state.messages[assistantMessage.id];
+                            if (!currentMessage) return state;
+                            return { messages: { ...state.messages, [assistantMessage.id]: { ...currentMessage, isThinking: false, content: accumulatedText } }};
+                        });
+                        lastRenderTime = Date.now();
+                    }
                 }
             }
 
-            set(state => ({ messages: { ...state.messages, [assistantMessage.id]: { ...assistantMessage, content: accumulatedText, timestamp: Date.now() } }}));
+            set((state: ChatStore) => {
+                const finalMessage = state.messages[assistantMessage.id];
+                if (!finalMessage) return state;
+                return { messages: { ...state.messages, [assistantMessage.id]: { ...finalMessage, isThinking: false, content: accumulatedText, timestamp: Date.now() } }};
+            });
         } catch (error) {
             const errorMessage = `Error: ${extractErrorMessage(error)}`;
             setError(errorMessage);
-            set(state => ({ messages: { ...state.messages, [assistantMessage.id]: { ...assistantMessage, content: errorMessage, timestamp: Date.now() } }}));
+            set((state: ChatStore) => {
+                const errorMsg = state.messages[assistantMessage.id];
+                if (!errorMsg) return state;
+                return { messages: { ...state.messages, [assistantMessage.id]: { ...errorMsg, isThinking: false, content: errorMessage, timestamp: Date.now() } }};
+            });
         } finally {
             setIsLoading(false);
             setAbortController(null);
+        }
+      };
+      
+      const executeGroupChatGeneration = async (
+        sessionId: string,
+        messagesToProcess: Message[],
+      ) => {
+        const { setIsLoading, setError, setAbortController } = useUIStore.getState();
+        setIsLoading(true);
+        setError(null);
+        const controller = new AbortController();
+        setAbortController(controller);
+      
+        try {
+          const session = get().groupSessions[sessionId];
+          if (!session) throw new Error('Group session not found.');
+      
+          const { settings, userPersona } = useSettingsStore.getState();
+          const { worlds, worldEntryInteractions } = useWorldStore.getState();
+          const { characters } = useCharacterStore.getState();
+          
+          const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
+      
+          const { provider, apiKeys, models, systemPrompt } = settings;
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          const model = models?.[provider] || '';
+          const world = worlds.find(w => w.id === session.worldId);
+          const worldId = world?.id || '';
+      
+          const turnActions: GroupTurnAction[] = await getGroupChatCompletion({
+            provider, apiKey, model,
+            messages: messagesToProcess,
+            sessionCharacters: sessionCharacters.map(c => ({ name: c.name, persona: c.persona })),
+            scenario: session.scenario,
+            userPersona,
+            globalSystemPrompt: systemPrompt,
+            world: world || null,
+            temperature: session.temperature ?? settings.temperature,
+            contextSize: session.contextSize ?? settings.contextSize,
+            maxOutputTokens: session.maxOutputTokens ?? settings.maxOutputTokens,
+            memorySummary: session.memorySummary,
+            activeCharacterNames: sessionCharacters.map(c => c.name),
+            interactionData: worldId ? worldEntryInteractions[worldId] : undefined,
+            settings,
+          });
+      
+          const newMessages: Message[] = turnActions.map(action => {
+            const character = action.characterName === 'Narrator' ? null : sessionCharacters.find(c => c.name === action.characterName);
+            return {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: action.content,
+              characterId: character ? character.id : 'narrator',
+              timestamp: Date.now(),
+            };
+          });
+      
+          set((state: ChatStore) => {
+            const currentSession = state.groupSessions[sessionId];
+            if (!currentSession) return state;
+            const updatedMessages = { ...state.messages };
+            newMessages.forEach(msg => {
+              updatedMessages[msg.id] = msg;
+            });
+            return {
+              messages: updatedMessages,
+              groupSessions: {
+                ...state.groupSessions,
+                [sessionId]: {
+                  ...currentSession,
+                  messageIds: [...currentSession.messageIds, ...newMessages.map(m => m.id)],
+                }
+              }
+            };
+          });
+      
+        } catch (error) {
+          const errorMessage = `Error: ${extractErrorMessage(error)}`;
+          setError(errorMessage);
+          const errorMessageObj: Message = { id: crypto.randomUUID(), role: 'assistant', content: errorMessage, timestamp: Date.now() };
+          set((state: ChatStore) => {
+              const currentSession = state.groupSessions[sessionId];
+              if (!currentSession) return state;
+              return {
+                  messages: { ...state.messages, [errorMessageObj.id]: errorMessageObj },
+                  groupSessions: { ...state.groupSessions, [sessionId]: { ...currentSession, messageIds: [...currentSession.messageIds, errorMessageObj.id] } }
+              };
+          });
+        } finally {
+          setIsLoading(false);
+          setAbortController(null);
         }
       };
 
@@ -188,7 +320,7 @@ export const useChatStore = create<ChatStore>()(
         characterSessions: {},
 
         // --- Single Chat Actions ---
-        newSession: (characterId) => {
+        newSession: (characterId: string) => {
             const { characters } = useCharacterStore.getState();
             const { settings } = useSettingsStore.getState();
             const character = characters.find(c => c.id === characterId);
@@ -207,7 +339,7 @@ export const useChatStore = create<ChatStore>()(
                 memoryEnabled: false,
             };
 
-            set(state => ({
+            set((state: ChatStore) => ({
                 sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
                 messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
                 characterSessions: { ...state.characterSessions, [characterId]: [...(state.characterSessions[characterId] || []), newSessionData.id] },
@@ -216,14 +348,14 @@ export const useChatStore = create<ChatStore>()(
             return newSessionData.id;
         },
 
-        sendMessage: async (content) => {
+        sendMessage: async (content: string) => {
             const { activeSessionId } = useUIStore.getState();
             if (!activeSessionId) return;
 
             const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content, timestamp: Date.now() };
             
             let session, currentMessages;
-            set(state => {
+            set((state: ChatStore) => {
                 session = state.sessions[activeSessionId!];
                 if (!session) return state;
                 const updatedMessages = { ...state.messages, [userMessage.id]: userMessage };
@@ -238,8 +370,9 @@ export const useChatStore = create<ChatStore>()(
 
             const { messages: processedMessages, summary: newSummary } = await handleSummarization(get().sessions[activeSessionId], currentMessages!);
             if (newSummary !== get().sessions[activeSessionId].memorySummary || processedMessages.length !== currentMessages!.length) {
-                set(state => {
+                set((state: ChatStore) => {
                     const session = state.sessions[activeSessionId!];
+                    if (!session) return state;
                     return {
                         sessions: { ...state.sessions, [activeSessionId!]: { ...session, memorySummary: newSummary, messageIds: processedMessages.map(m => m.id) } }
                     }
@@ -249,8 +382,8 @@ export const useChatStore = create<ChatStore>()(
             await executeSingleChatGeneration(activeSessionId, processedMessages);
         },
 
-        editMessage: (sessionId, messageId, newContent) => {
-            set(state => {
+        editMessage: (sessionId: string, messageId: string, newContent: string) => {
+            set((state: ChatStore) => {
                 const message = state.messages[messageId];
                 if (!message) return state;
                 return {
@@ -259,8 +392,8 @@ export const useChatStore = create<ChatStore>()(
             });
         },
 
-        deleteMessage: (sessionId, messageId) => {
-            set(state => {
+        deleteMessage: (sessionId: string, messageId: string) => {
+            set((state: ChatStore) => {
                 const session = state.sessions[sessionId];
                 if (!session) return state;
                 const newMessages = { ...state.messages };
@@ -272,7 +405,7 @@ export const useChatStore = create<ChatStore>()(
             });
         },
 
-        regenerateResponse: async (sessionId) => {
+        regenerateResponse: async (sessionId: string) => {
             const session = get().sessions[sessionId];
             if (!session) return;
             const allMessages = session.messageIds.map(id => get().messages[id]);
@@ -280,16 +413,18 @@ export const useChatStore = create<ChatStore>()(
             if (lastUserIndex === -1) return;
 
             const messagesToProcess = allMessages.slice(0, lastUserIndex + 1);
-            set(state => ({
+            set((state: ChatStore) => ({
                 sessions: { ...state.sessions, [sessionId]: { ...session, messageIds: messagesToProcess.map(m => m.id) } }
             }));
 
-            await executeSingleChatGeneration(sessionId, messagesToProcess, true);
+            // Regeneration should not be a "continuation", so pass `false`.
+            // This allows the thinking process to trigger if it's enabled.
+            await executeSingleChatGeneration(sessionId, messagesToProcess, false);
         },
 
-        continueGeneration: (sessionId) => executeSingleChatGeneration(sessionId, get().sessions[sessionId].messageIds.map(id => get().messages[id]), true),
+        continueGeneration: (sessionId: string) => executeSingleChatGeneration(sessionId, get().sessions[sessionId].messageIds.map(id => get().messages[id]), true),
 
-        forkChat: (sessionId, messageId) => {
+        forkChat: (sessionId: string, messageId: string) => {
             const { activeCharacterId } = useUIStore.getState();
             if (!activeCharacterId) return '';
             const session = get().sessions[sessionId];
@@ -306,7 +441,7 @@ export const useChatStore = create<ChatStore>()(
                 messageIds: newHistoryIds,
             };
             
-            set(state => ({
+            set((state: ChatStore) => ({
                 sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
                 characterSessions: { ...state.characterSessions, [activeCharacterId]: [...(state.characterSessions[activeCharacterId] || []), newSessionData.id] },
             }));
@@ -315,12 +450,12 @@ export const useChatStore = create<ChatStore>()(
             return newSessionData.id;
         },
 
-        deleteSession: (characterId, sessionId) => {
+        deleteSession: (characterId: string, sessionId: string) => {
             const session = get().sessions[sessionId];
             if (!session) return;
             const messagesToDelete = new Set(session.messageIds);
             
-            set(state => {
+            set((state: ChatStore) => {
                 const newSessions = { ...state.sessions };
                 delete newSessions[sessionId];
                 const newMessages = { ...state.messages };
@@ -337,7 +472,7 @@ export const useChatStore = create<ChatStore>()(
         },
 
         // --- Group Chat Actions ---
-        createGroupChat: (characterIds, scenario) => {
+        createGroupChat: (characterIds: string[], scenario: string) => {
             const { characters } = useCharacterStore.getState();
             const sessionChars = characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
             
@@ -349,7 +484,7 @@ export const useChatStore = create<ChatStore>()(
                 messageIds: [],
             };
 
-            set(state => ({
+            set((state: ChatStore) => ({
                 groupSessions: { ...state.groupSessions, [newGroupSession.id]: newGroupSession }
             }));
 
@@ -359,18 +494,108 @@ export const useChatStore = create<ChatStore>()(
             return newGroupSession.id;
         },
 
-        sendGroupMessage: async (content) => { /* Similar to sendMessage, but for groups */ },
-        editGroupMessage: (sessionId, messageId, newContent) => { get().editMessage(sessionId, messageId, newContent) },
-        deleteGroupMessage: (sessionId, messageId) => { get().deleteMessage(sessionId, messageId) },
-        regenerateGroupResponse: async (sessionId) => { /* Similar to regenerate, but for groups */ },
-        continueGroupGeneration: async (sessionId) => { /* Similar to continue, but for groups */ },
-        forkGroupChat: (sessionId, messageId) => { /* Similar to fork, but for groups */ return ''},
+        sendGroupMessage: async (content: string) => {
+          const { activeGroupSessionId } = useUIStore.getState();
+          if (!activeGroupSessionId) return;
+      
+          const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content, timestamp: Date.now() };
+          
+          let session, currentMessages;
+          set((state: ChatStore) => {
+              session = state.groupSessions[activeGroupSessionId!];
+              if (!session) return state;
+              const updatedMessages = { ...state.messages, [userMessage.id]: userMessage };
+              currentMessages = [...session.messageIds, userMessage.id].map(id => updatedMessages[id]);
+              return {
+                  messages: updatedMessages,
+                  groupSessions: { ...state.groupSessions, [activeGroupSessionId!]: { ...session, messageIds: [...session.messageIds, userMessage.id] } }
+              };
+          });
+          
+          if (!get().groupSessions[activeGroupSessionId]) return;
+      
+          const { messages: processedMessages, summary: newSummary } = await handleSummarization(get().groupSessions[activeGroupSessionId], currentMessages!);
+          if (newSummary !== get().groupSessions[activeGroupSessionId].memorySummary || processedMessages.length !== currentMessages!.length) {
+              set((state: ChatStore) => {
+                  const session = state.groupSessions[activeGroupSessionId!];
+                   if (!session) return state;
+                  return {
+                      groupSessions: { ...state.groupSessions, [activeGroupSessionId!]: { ...session, memorySummary: newSummary, messageIds: processedMessages.map(m => m.id) } }
+                  }
+              });
+          }
+      
+          await executeGroupChatGeneration(activeGroupSessionId, processedMessages);
+        },
+        editGroupMessage: (sessionId: string, messageId: string, newContent: string) => {
+          set((state: ChatStore) => {
+            const message = state.messages[messageId];
+            if (!message) return state;
+            return {
+                messages: { ...state.messages, [messageId]: { ...message, content: newContent } }
+            };
+          });
+        },
+        deleteGroupMessage: (sessionId: string, messageId: string) => {
+          set((state: ChatStore) => {
+            const session = state.groupSessions[sessionId];
+            if (!session) return state;
+            const newMessages = { ...state.messages };
+            delete newMessages[messageId];
+            return {
+                messages: newMessages,
+                groupSessions: { ...state.groupSessions, [sessionId]: { ...session, messageIds: session.messageIds.filter(id => id !== messageId) } }
+            };
+          });
+        },
+        regenerateGroupResponse: async (sessionId: string) => {
+          const session = get().groupSessions[sessionId];
+          if (!session) return;
+          const allMessages = session.messageIds.map(id => get().messages[id]);
+          const lastUserIndex = allMessages.map(m => m.role).lastIndexOf('user');
+          if (lastUserIndex === -1) return;
+      
+          const messagesToProcess = allMessages.slice(0, lastUserIndex + 1);
+          set((state: ChatStore) => ({
+              groupSessions: { ...state.groupSessions, [sessionId]: { ...session, messageIds: messagesToProcess.map(m => m.id) } }
+          }));
+      
+          await executeGroupChatGeneration(sessionId, messagesToProcess);
+        },
+        continueGroupGeneration: async (sessionId: string) => {
+          const session = get().groupSessions[sessionId];
+          if (!session) return;
+          const messagesToProcess = session.messageIds.map(id => get().messages[id]);
+          await executeGroupChatGeneration(sessionId, messagesToProcess);
+        },
+        forkGroupChat: (sessionId: string, messageId: string) => {
+          const session = get().groupSessions[sessionId];
+          if (!session) return '';
+      
+          const messageIndex = session.messageIds.indexOf(messageId);
+          if (messageIndex === -1) return '';
+          
+          const newHistoryIds = session.messageIds.slice(0, messageIndex + 1);
+          const newSessionData: GroupSession = {
+              ...session,
+              id: crypto.randomUUID(),
+              title: `Fork of ${session.title}`,
+              messageIds: newHistoryIds,
+          };
+          
+          set((state: ChatStore) => ({
+              groupSessions: { ...state.groupSessions, [newSessionData.id]: newSessionData },
+          }));
+      
+          useUIStore.getState().setActiveGroupSessionId(newSessionData.id);
+          return newSessionData.id;
+        },
 
-        deleteGroupSession: (sessionId) => {
+        deleteGroupSession: (sessionId: string) => {
             const session = get().groupSessions[sessionId];
             if (!session) return;
             const messagesToDelete = new Set(session.messageIds);
-            set(state => {
+            set((state: ChatStore) => {
                 const newGroupSessions = { ...state.groupSessions };
                 delete newGroupSessions[sessionId];
                 const newMessages = { ...state.messages };
@@ -380,44 +605,69 @@ export const useChatStore = create<ChatStore>()(
         },
 
         // --- Cross-slice utility actions ---
-// FIX: Refactor to avoid calling get() inside set() and to properly handle state updates.
-        deleteChatsForCharacter: (characterId) => {
-            const { characterSessions, deleteSession, groupSessions, deleteGroupSession } = get();
-            const sessionsForChar = characterSessions[characterId] || [];
-            sessionsForChar.forEach(sessionId => {
-                deleteSession(characterId, sessionId);
-            });
+        deleteChatsForCharacter: (characterId: string) => {
+            set((state: ChatStore) => {
+                const sessionsToDelete = new Set(state.characterSessions[characterId] || []);
+                const messagesToDelete = new Set<string>();
 
-            Object.values(groupSessions).forEach(gs => {
-                if (gs.characterIds.includes(characterId)) {
-                    deleteGroupSession(gs.id);
-                }
+                sessionsToDelete.forEach(sessionId => {
+                    const session = state.sessions[sessionId];
+                    if (session) {
+                        session.messageIds.forEach(msgId => messagesToDelete.add(msgId));
+                    }
+                });
+
+                const groupSessionsToDelete = new Set<string>();
+                Object.values(state.groupSessions).forEach(gs => {
+                    if (gs.characterIds.includes(characterId)) {
+                        groupSessionsToDelete.add(gs.id);
+                        gs.messageIds.forEach(msgId => messagesToDelete.add(msgId));
+                    }
+                });
+                
+                const newSessions = { ...state.sessions };
+                sessionsToDelete.forEach(id => delete newSessions[id]);
+
+                const newGroupSessions = { ...state.groupSessions };
+                groupSessionsToDelete.forEach(id => delete newGroupSessions[id]);
+                
+                const newMessages = { ...state.messages };
+                messagesToDelete.forEach(id => delete newMessages[id]);
+                
+                const newCharSessions = { ...state.characterSessions };
+                delete newCharSessions[characterId];
+
+                return {
+                    ...state,
+                    sessions: newSessions,
+                    groupSessions: newGroupSessions,
+                    messages: newMessages,
+                    characterSessions: newCharSessions,
+                };
             });
         },
 
-// FIX: Implement immutable updates for unlinking worlds to prevent direct state mutation and fix type errors.
-        unlinkWorldFromAllSessions: (worldId) => {
-            set(state => {
-                const newSessions: Record<string, Session> = {};
-                for (const sessionId in state.sessions) {
-                    const session = state.sessions[sessionId];
-                    newSessions[sessionId] = session.worldId === worldId ? { ...session, worldId: null } : session;
-                }
-
-                const newGroupSessions: Record<string, GroupSession> = {};
-                for (const sessionId in state.groupSessions) {
-                    const session = state.groupSessions[sessionId];
-                    newGroupSessions[sessionId] = session.worldId === worldId ? { ...session, worldId: null } : session;
-                }
-
-                return { sessions: newSessions, groupSessions: newGroupSessions };
+        unlinkWorldFromAllSessions: (worldId: string) => {
+            set((state: ChatStore) => {
+                const updatedSessions = Object.fromEntries(
+                    Object.entries(state.sessions).map(([id, session]) => [
+                        id,
+                        session.worldId === worldId ? { ...session, worldId: null } : session,
+                    ])
+                );
+                const updatedGroupSessions = Object.fromEntries(
+                    Object.entries(state.groupSessions).map(([id, session]) => [
+                        id,
+                        session.worldId === worldId ? { ...session, worldId: null } : session,
+                    ])
+                );
+                return { ...state, sessions: updatedSessions, groupSessions: updatedGroupSessions };
             });
         },
         
         // --- Session Settings ---
-// FIX: Refactor session setting updates to be type-safe by avoiding dynamic key access on the state object.
-        setSessionWorld: (sessionId, worldId, isGroup = false) => {
-            set(state => {
+        setSessionWorld: (sessionId: string, worldId: string | null, isGroup: boolean = false) => {
+            set((state: ChatStore) => {
                 if (isGroup) {
                     const session = state.groupSessions[sessionId];
                     if (!session) return state;
@@ -429,8 +679,8 @@ export const useChatStore = create<ChatStore>()(
                 }
             });
         },
-        setSessionTemperature: (sessionId, temperature, isGroup = false) => {
-            set(state => {
+        setSessionTemperature: (sessionId: string, temperature: number, isGroup: boolean = false) => {
+            set((state: ChatStore) => {
                 if (isGroup) {
                     const session = state.groupSessions[sessionId];
                     if (!session) return state;
@@ -442,8 +692,8 @@ export const useChatStore = create<ChatStore>()(
                 }
             });
         },
-        setSessionContextSize: (sessionId, contextSize, isGroup = false) => {
-            set(state => {
+        setSessionContextSize: (sessionId: string, contextSize: number, isGroup: boolean = false) => {
+            set((state: ChatStore) => {
                 if (isGroup) {
                     const session = state.groupSessions[sessionId];
                     if (!session) return state;
@@ -455,8 +705,8 @@ export const useChatStore = create<ChatStore>()(
                 }
             });
         },
-        setSessionMaxOutputTokens: (sessionId, maxOutputTokens, isGroup = false) => {
-             set(state => {
+        setSessionMaxOutputTokens: (sessionId: string, maxOutputTokens: number, isGroup: boolean = false) => {
+             set((state: ChatStore) => {
                 if (isGroup) {
                     const session = state.groupSessions[sessionId];
                     if (!session) return state;
@@ -468,8 +718,8 @@ export const useChatStore = create<ChatStore>()(
                 }
             });
         },
-        setSessionMemoryEnabled: (sessionId, enabled, isGroup = false) => {
-            set(state => {
+        setSessionMemoryEnabled: (sessionId: string, enabled: boolean, isGroup: boolean = false) => {
+            set((state: ChatStore) => {
                 if (isGroup) {
                     const session = state.groupSessions[sessionId];
                     if (!session) return state;

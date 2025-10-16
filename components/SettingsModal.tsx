@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, LLMProvider, Theme, ThemeConfig } from '../types';
+import { Settings, LLMProvider, Theme, ThemeConfig, ThinkingDepth } from '../types';
 import { Icon } from './Icon';
 import { useSettingsStore } from '../store/stores/settingsStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,7 +9,7 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type SettingsSection = 'general' | 'appearance' | 'providers' | 'prompts';
+type SettingsSection = 'general' | 'appearance' | 'providers' | 'prompts' | 'thinking-engine';
 
 function SectionButton({
   icon,
@@ -390,6 +390,88 @@ function PromptsSection({
   );
 }
 
+function ThinkingEngineSection({
+  settings,
+  setSettings,
+}: {
+  settings: Settings;
+  setSettings: React.Dispatch<React.SetStateAction<Settings>>;
+}) {
+  return (
+    <SettingsSectionPanel
+      title="Thinking Engine"
+      description="Enable multi-step thinking for more complex and reasoned AI responses. This may increase response time and API costs."
+    >
+      <FormField label="Enable Thinking Engine" htmlFor="thinkingEnabled">
+        <label htmlFor="thinkingEnabled" className="flex items-center justify-between cursor-pointer group/toggle p-3 bg-slate-800/50 rounded-md">
+          <span className="text-sm font-medium text-slate-300 group-hover/toggle:text-white transition-colors">
+            Enable multi-step thinking
+          </span>
+          <div className="relative">
+            <input
+              type="checkbox"
+              id="thinkingEnabled"
+              checked={settings.thinkingEnabled}
+              onChange={(e) => setSettings(p => ({ ...p, thinkingEnabled: e.target.checked }))}
+              className="sr-only"
+            />
+            <div className={`block w-10 h-6 rounded-full transition-colors ${settings.thinkingEnabled ? 'bg-crimson-500' : 'bg-slate-700'}`}></div>
+            <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${settings.thinkingEnabled ? 'translate-x-4' : ''}`}></div>
+          </div>
+        </label>
+      </FormField>
+      <FormField label="Show Thinking Process" htmlFor="showThinking">
+        <label htmlFor="showThinking" className="flex items-center justify-between cursor-pointer group/toggle p-3 bg-slate-800/50 rounded-md">
+          <span className="text-sm font-medium text-slate-300 group-hover/toggle:text-white transition-colors">
+            Display thinking steps in chat
+          </span>
+          <div className="relative">
+            <input
+              type="checkbox"
+              id="showThinking"
+              checked={settings.showThinking}
+              onChange={(e) => setSettings(p => ({ ...p, showThinking: e.target.checked }))}
+              className="sr-only"
+            />
+            <div className={`block w-10 h-6 rounded-full transition-colors ${settings.showThinking ? 'bg-crimson-500' : 'bg-slate-700'}`}></div>
+            <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${settings.showThinking ? 'translate-x-4' : ''}`}></div>
+          </div>
+        </label>
+      </FormField>
+      <FormField
+        label="Thinking Depth"
+        htmlFor="thinkingDepth"
+        description="Controls how many analysis steps the AI performs."
+      >
+        <select
+          id="thinkingDepth"
+          value={settings.thinkingDepth}
+          onChange={(e) => setSettings(p => ({ ...p, thinkingDepth: e.target.value as ThinkingDepth }))}
+          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3"
+        >
+          {Object.values(ThinkingDepth).map(depth => (
+            <option key={depth} value={depth}>{depth}</option>
+          ))}
+        </select>
+      </FormField>
+      <FormField
+        label="Thinking Timeout (ms)"
+        htmlFor="thinkingTimeout"
+        description="Maximum time for the thinking process before falling back to a direct response."
+      >
+        <input
+          type="number"
+          id="thinkingTimeout"
+          step="1000"
+          value={settings.thinkingTimeout}
+          onChange={(e) => setSettings(p => ({ ...p, thinkingTimeout: parseInt(e.target.value, 10) || 15000 }))}
+          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3"
+        />
+      </FormField>
+    </SettingsSectionPanel>
+  );
+}
+
 function SettingsModal({ onClose }: SettingsModalProps) {
   const { settings: currentSettings, saveSettings } = useSettingsStore();
   const [settings, setSettings] = useState<Settings>(currentSettings);
@@ -426,6 +508,8 @@ function SettingsModal({ onClose }: SettingsModalProps) {
         );
       case 'prompts':
         return <PromptsSection settings={settings} setSettings={setSettings} />;
+      case 'thinking-engine':
+        return <ThinkingEngineSection settings={settings} setSettings={setSettings} />;
       default:
         return null;
     }
@@ -477,6 +561,12 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                   label="Appearance"
                   isActive={activeSection === 'appearance'}
                   onClick={() => setActiveSection('appearance')}
+                />
+                 <SectionButton
+                  icon="brain"
+                  label="Thinking Engine"
+                  isActive={activeSection === 'thinking-engine'}
+                  onClick={() => setActiveSection('thinking-engine')}
                 />
                 <SectionButton
                   icon="send"

@@ -4,6 +4,17 @@ export enum LLMProvider {
   DEEPSEEK = 'DeepSeek',
 }
 
+export enum ThinkingDepth {
+  SHALLOW = 'Shallow', // Just planning
+  MEDIUM = 'Medium',   // Analysis + Planning
+  DEEP = 'Deep',     // Analysis + Planning + Reasoning
+}
+
+export interface ThinkingStep {
+  title: string;
+  content: string;
+}
+
 export interface Persona {
   id: string;
   name: string;
@@ -35,6 +46,8 @@ export interface Message {
   content: string;
   timestamp?: number;
   characterId?: string; // For group chats
+  isThinking?: boolean;
+  thinkingProcess?: ThinkingStep[];
 }
 
 export enum WorldEntryCategory {
@@ -105,6 +118,10 @@ export interface Settings {
   maxOutputTokens: number;
   temperature: number;
   worldId: string | null;
+  thinkingEnabled: boolean;
+  showThinking: boolean;
+  thinkingDepth: ThinkingDepth;
+  thinkingTimeout: number; // in milliseconds
 }
 
 export type View =

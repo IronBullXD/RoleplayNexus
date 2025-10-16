@@ -376,6 +376,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
       sendGroupMessage(input.trim());
       setInput('');
     } else if (messages.length > 0 && activeGroupSessionId) {
+      // FIX: Pass the activeGroupSessionId to continueGroupGeneration to resolve argument mismatch.
       continueGroupGeneration(activeGroupSessionId);
     }
   }, [isLoading, input, messages, activeGroupSessionId, sendGroupMessage, continueGroupGeneration]);
@@ -458,7 +459,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
           <IconButton
             icon="history"
             label="Chat History"
-            onClick={onNavigateToHistory}
+            onClick={() => onNavigateToHistory()}
           />
           <ChatSettingsPopover
             settings={{
@@ -470,7 +471,6 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
               memoryEnabled: session.memoryEnabled ?? false,
             }}
             worlds={worlds}
-// FIX: Add `true` for isGroup parameter to session setting functions to ensure group chat settings are updated correctly.
             onSetWorld={(worldId) => activeGroupSessionId && setSessionWorld(activeGroupSessionId, worldId, true)}
             onSetTemperature={(temp) => activeGroupSessionId && setSessionTemperature(activeGroupSessionId, temp, true)}
             onSetContextSize={(size) => activeGroupSessionId && setSessionContextSize(activeGroupSessionId, size, true)}
@@ -502,7 +502,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
           {hasMore && (
             <div className="text-center my-4 animate-fade-in">
               <button
-                onClick={loadMore}
+                onClick={() => loadMore()}
                 className="px-4 py-2 text-sm font-semibold text-crimson-300 bg-crimson-900/50 border border-crimson-700/70 rounded-full hover:bg-crimson-800/50 transition-colors shadow-inner shadow-crimson-900/50"
               >
                 Show Older Messages
@@ -524,6 +524,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
                 isLastMessage={msg.id === lastMessage?.id}
                 isLoading={isLoading}
                 onDelete={(messageId) => activeGroupSessionId && deleteGroupMessage(activeGroupSessionId, messageId)}
+                // FIX: Pass the activeGroupSessionId to regenerateGroupResponse to resolve argument mismatch.
                 onRegenerate={() => activeGroupSessionId && regenerateGroupResponse(activeGroupSessionId)}
                 onFork={(messageId) => activeGroupSessionId && forkGroupChat(activeGroupSessionId, messageId)}
                 isEditing={msg.id === editingMessageId}
@@ -563,7 +564,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
               {isLoading ? (
                 <button
                   type="button"
-                  onClick={stopGeneration}
+                  onClick={() => stopGeneration()}
                   className="w-10 h-10 flex items-center justify-center rounded-md bg-ember-600 text-white hover:bg-ember-500 transition-colors shadow-lg"
                   aria-label="Stop generation"
                 >

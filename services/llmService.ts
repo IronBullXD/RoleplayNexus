@@ -6,6 +6,7 @@ import {
   Persona,
   WorldEntry,
   GroupTurnAction,
+  Settings,
 } from '../types';
 import { API_ENDPOINTS } from '../constants';
 import { logger } from './logger';
@@ -325,6 +326,8 @@ interface CompletionParams {
   characterName?: string; // For single chat
   activeCharacterNames?: string[]; // For group chat
   interactionData?: Record<string, { viewCount: number; lastViewed: number }>;
+  // FIX: Add settings to CompletionParams to make it available for the thinking service.
+  settings: Settings;
 }
 
 export interface GeneratedCharacterProfile {
@@ -395,7 +398,7 @@ CRITICAL INSTRUCTIONS:
         if (provider === LLMProvider.GEMINI) {
             const response = await geminiAI.models.generateContent({
                 model: model,
-                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                contents: userPrompt,
                 config: {
                     systemInstruction: systemPrompt,
                     temperature: 0.2, // Lower temperature for more analytical task
@@ -426,7 +429,7 @@ CRITICAL INSTRUCTIONS:
             logger.apiResponse('Inconsistency check successful', { response: report });
             return report;
         } else {
-             const endpoint = API_ENDPOINTS[provider];
+             const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
             if (!endpoint) throw new Error(`API endpoint for ${provider} is not configured.`);
             
             const openAIPrompt = `${systemPrompt}\n\n${userPrompt}`;
@@ -513,7 +516,7 @@ Instructions:
       logger.apiResponse('Summarization successful', { summary });
       return summary;
     } else {
-      const endpoint = API_ENDPOINTS[provider];
+      const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
       if (!endpoint)
         throw new Error(`API endpoint for ${provider} is not configured.`);
 
@@ -599,7 +602,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
     if (provider === LLMProvider.GEMINI) {
       const response = await geminiAI.models.generateContent({
         model: model,
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        contents: userPrompt,
         config: {
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
@@ -638,7 +641,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
       });
       return profile;
     } else {
-      const endpoint = API_ENDPOINTS[provider];
+      const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
       if (!endpoint)
         throw new Error(`API endpoint for ${provider} is not configured.`);
 
@@ -1289,7 +1292,7 @@ Based on the conversation history, generate the next turn in the scene.`;
       response_format: { type: 'json_object' },
     };
 
-    const response = await fetchWithRetry(API_ENDPOINTS[provider], {
+    const response = await fetchWithRetry(API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS], {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

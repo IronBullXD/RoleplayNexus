@@ -2,10 +2,9 @@ import React, { ErrorInfo, ReactNode } from 'react';
 import { logger } from '../services/logger';
 import { Icon } from './Icon';
 
-interface Props {
-  children: ReactNode;
+type Props = React.PropsWithChildren<{
   componentName?: string;
-}
+}>;
 
 interface State {
   hasError: boolean;
@@ -13,14 +12,12 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Added constructor to initialize state properly.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-    };
-  }
+  // FIX: Replaced constructor with modern class field syntax for state initialization.
+  // This resolves TypeScript errors where `this.state` and `this.props` were not being correctly inferred on the class instance.
+  public state: State = {
+    hasError: false,
+    error: undefined,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
