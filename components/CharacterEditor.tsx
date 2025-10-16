@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Character, StructuredPersona } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
@@ -65,7 +65,7 @@ interface PersonaFieldProps {
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
-function PersonaField({
+const PersonaField = React.memo(function PersonaField({
   name,
   label,
   placeholder,
@@ -92,7 +92,9 @@ function PersonaField({
       />
     </div>
   );
-}
+});
+PersonaField.displayName = 'PersonaField';
+
 
 function CharacterEditor({ character, onClose }: CharacterEditorProps) {
   const { saveCharacter, generateCharacterProfile } = useCharacterStore();
@@ -127,41 +129,50 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
     setStructuredPersona(parsePersona(formData.persona || ''));
   }, [formData.persona]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
-  const handleStructuredPersonaChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) =>
-    setStructuredPersona((p) => ({
-      ...p,
-      [e.target.name as keyof StructuredPersona]: e.target.value,
-    }));
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setFormData((p) => ({ ...p, [e.target.name]: e.target.value })),
+    [],
+  );
+  const handleStructuredPersonaChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+      setStructuredPersona((p) => ({
+        ...p,
+        [e.target.name as keyof StructuredPersona]: e.target.value,
+      })),
+    [],
+  );
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData((p) => ({ ...p, avatar: reader.result as string }));
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0]) {
+        const reader = new FileReader();
+        reader.onloadend = () =>
+          setFormData((p) => ({ ...p, avatar: reader.result as string }));
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    },
+    [],
+  );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Explicitly construct a valid Character object to satisfy the type system without casting.
-    const characterToSave: Character = {
-      id: formData.id || crypto.randomUUID(),
-      name: formData.name || 'Unnamed Character',
-      avatar: formData.avatar || '',
-      greeting: formData.greeting || '',
-      description: formData.description || '',
-      persona: serializePersona(structuredPersona),
-      isImmutable: formData.isImmutable,
-    };
-    saveCharacter(characterToSave);
-    onClose();
-  };
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      // Explicitly construct a valid Character object to satisfy the type system without casting.
+      const characterToSave: Character = {
+        id: formData.id || crypto.randomUUID(),
+        name: formData.name || 'Unnamed Character',
+        avatar: formData.avatar || '',
+        greeting: formData.greeting || '',
+        description: formData.description || '',
+        persona: serializePersona(structuredPersona),
+        isImmutable: formData.isImmutable,
+      };
+      saveCharacter(characterToSave);
+      onClose();
+    },
+    [formData, structuredPersona, saveCharacter, onClose],
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -171,7 +182,7 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleGenerateClick = async () => {
+  const handleGenerateClick = useCallback(async () => {
     if (!aiConcept.trim()) return;
     setIsGenerating(true);
     setGenerationError(null);
@@ -194,7 +205,7 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [aiConcept, generateCharacterProfile]);
 
   return (
     <motion.div

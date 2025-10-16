@@ -3,7 +3,7 @@ import { World } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import WorldEditorPage from './WorldEditorPage';
-import { useAppStore } from '../store/useAppStore';
+import { useWorldStore } from '../store/stores/worldStore';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const CustomCheckbox: React.FC<{
@@ -126,7 +126,7 @@ const WorldItem: React.FC<{
 );
 
 const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
-  const { worlds, saveWorld, deleteWorld, importWorlds } = useAppStore();
+  const { worlds, saveWorld, deleteWorld, importWorlds } = useWorldStore();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingWorld, setEditingWorld] = useState<Partial<World> | null>(null);
   const [selectedWorldIds, setSelectedWorldIds] = useState<Set<string>>(

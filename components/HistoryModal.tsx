@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Character, ChatSession, GroupChatSession, Message } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
+import { useCharacterStore } from '../store/stores/characterStore';
+import { useChatStore, GroupSession } from '../store/stores/chatStore';
 import { motion } from 'framer-motion';
 import { useUIStore } from '../store/stores/uiStore';
 
@@ -75,15 +76,15 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 };
 
 function HistoryModal({ onClose }: HistoryModalProps) {
+  const { characters } = useCharacterStore();
   const {
-    characters,
     sessions,
     characterSessions,
     groupSessions,
     messages: allMessages,
     deleteSession,
     deleteGroupSession,
-  } = useAppStore();
+  } = useChatStore();
   const { setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
   const [activeTab, setActiveTab] = useState<'single' | 'group'>('single');
 
@@ -98,6 +99,7 @@ function HistoryModal({ onClose }: HistoryModalProps) {
   const singleChatSessions = useMemo(
     () =>
       Object.entries(characterSessions)
+        // FIX: Add explicit type annotation to destructuring to resolve property access errors.
         .flatMap(([charId, sessionIds]: [string, string[]]) => {
             return sessionIds.map(sessionId => {
                 const session = sessions[sessionId];
@@ -117,7 +119,8 @@ function HistoryModal({ onClose }: HistoryModalProps) {
   const groupChatSessions = useMemo(
     () =>
       Object.values(groupSessions)
-        .map((session) => {
+        // FIX: Added explicit `GroupSession` type to resolve property access errors on `session`.
+        .map((session: GroupSession) => {
             const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
             return {
                 session,

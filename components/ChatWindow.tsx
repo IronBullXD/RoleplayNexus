@@ -19,7 +19,6 @@ import { logger } from '../services/logger';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import Avatar from './Avatar';
 import ChatSettingsPopover from './ChatSettingsPopover';
-import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
 import { usePaginatedMessages } from '../hooks/usePaginatedMessages';
 import {
@@ -32,6 +31,11 @@ import { AnimatePresence } from 'framer-motion';
 import { findRelevantEntries } from '../services/llmService';
 import SuggestionsBar from './SuggestionsBar';
 import ThinkingProcessDisplay from './ThinkingProcessDisplay';
+import { useUIStore } from '../store/stores/uiStore';
+import { useCharacterStore } from '../store/stores/characterStore';
+import { useChatStore } from '../store/stores/chatStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
+import { useWorldStore } from '../store/stores/worldStore';
 
 interface ChatWindowProps {
   onNavigateToHistory: () => void;
@@ -282,33 +286,31 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
-  const {
-    activeCharacterId,
-    characters,
-    sessions,
-    messages: allMessages,
-    activeSessionId,
-    userPersona,
-    settings,
-    worlds,
-    resetChatView,
-    newSession,
-    setActiveSessionId,
-    setSessionWorld,
-    setSessionTemperature,
-    setSessionContextSize,
-    setSessionMaxOutputTokens,
-    setSessionMemoryEnabled,
-    deleteMessage,
-    regenerateResponse,
-    forkChat,
-    editMessage,
-    sendMessage,
-    continueGeneration,
-    stopGeneration,
-    isLoading,
-    error,
-  } = useAppStore();
+  const { activeCharacterId, activeSessionId, resetChatView, stopGeneration } = useUIStore();
+  const { isLoading, error } = useUIStore(state => ({ isLoading: state.isLoading, error: state.error }));
+  
+  const characters = useCharacterStore(state => state.characters);
+  
+  const { 
+    sessions, 
+    messages: allMessages, 
+    newSession, 
+    setActiveSessionId, 
+    setSessionWorld, 
+    setSessionTemperature, 
+    setSessionContextSize, 
+    setSessionMaxOutputTokens, 
+    setSessionMemoryEnabled, 
+    deleteMessage, 
+    regenerateResponse, 
+    forkChat, 
+    editMessage, 
+    sendMessage, 
+    continueGeneration 
+  } = useChatStore();
+
+  const { userPersona, settings } = useSettingsStore();
+  const worlds = useWorldStore(state => state.worlds);
 
   const character = useMemo(
     () => characters.find((c) => c.id === activeCharacterId),

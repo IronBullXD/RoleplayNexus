@@ -1,5 +1,6 @@
 import { World, WorldEntry, ValidationIssue, LLMProvider } from '../types';
 import { checkForInconsistencies } from './llmService';
+import { ERROR_MESSAGES } from './errorMessages';
 
 const MIN_CONTENT_LENGTH = 50; // characters
 
@@ -113,6 +114,10 @@ export async function runConsistencyCheck({
 }): Promise<ValidationIssue[]> {
     if (!world.entries || world.entries.filter(e => e.enabled).length < 2) {
         return [];
+    }
+    
+    if (!model || !apiKey) {
+        throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
     }
 
     const reports = await checkForInconsistencies({ world, provider, apiKey, model });

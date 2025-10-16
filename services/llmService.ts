@@ -10,13 +10,55 @@ import {
 } from '../types';
 import { API_ENDPOINTS } from '../constants';
 import { logger } from './logger';
+import { ERROR_MESSAGES } from './errorMessages';
+
+// --- Type Guards for Error Handling ---
+/**
+ * Represents an error from an API call that includes an HTTP status code.
+ */
+export interface ApiError extends Error {
+  status: number;
+}
+
+/**
+ * Type guard to check if an error object is an ApiError.
+ * @param error The error object to check.
+ * @returns True if the error is an ApiError, false otherwise.
+ */
+export function isApiError(error: unknown): error is ApiError {
+  return (
+    error instanceof Error &&
+    'status' in error &&
+    typeof (error as any).status === 'number'
+  );
+}
+
 
 // Instantiate the Gemini client once at the module level.
 // Per guidelines, Gemini API key MUST come from the environment.
 const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Module-level cache for pre-computed world indices.
-const worldIndexCache = new Map<string, { index: any; entriesJSON: string }>();
+// Module-level cache for pre-computed world indices with LRU-style cleanup.
+const MAX_CACHE_SIZE = 50;
+const worldIndexCache = new Map<string, { index: any; entriesJSON: string; lastAccessed: number }>();
+
+/**
+ * Cleans up the world index cache if it exceeds the maximum size,
+ * removing the least recently used items.
+ */
+function cleanupCache(): void {
+  if (worldIndexCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(worldIndexCache.entries());
+    // Sort by lastAccessed timestamp, oldest first
+    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+    // Remove 25% of the cache
+    const toRemoveCount = Math.floor(MAX_CACHE_SIZE * 0.25);
+    for (let i = 0; i < toRemoveCount; i++) {
+      worldIndexCache.delete(entries[i][0]);
+    }
+    logger.log(`Cleaned up world index cache. Removed ${toRemoveCount} items.`);
+  }
+}
 
 
 /**
@@ -133,10 +175,14 @@ function getOrBuildWorldIndex(world: World) {
 
   if (cached && cached.entriesJSON === entriesJSON) {
     logger.log('Using cached world index.', { worldId: world.id });
+    cached.lastAccessed = Date.now(); // Update last accessed timestamp
     return cached.index;
   }
 
   logger.log('Building new world index.', { worldId: world.id });
+
+  // Clean up cache before adding a new entry to prevent exceeding the limit.
+  cleanupCache();
 
   const entryIdToEntryMap = new Map<string, WorldEntry>();
   const plainKeywordMap = new Map<string, WorldEntry[]>();
@@ -183,7 +229,7 @@ function getOrBuildWorldIndex(world: World) {
     stem,
     entryIdToEntryMap,
   };
-  worldIndexCache.set(world.id, { index, entriesJSON });
+  worldIndexCache.set(world.id, { index, entriesJSON, lastAccessed: Date.now() });
   return index;
 }
 
@@ -572,7 +618,7 @@ The greeting message MUST adhere to the following markdown-style formatting rule
 A valid greeting might look like this: *He smiled warmly and extended his hand.* "It's a pleasure to finally meet you."
 
 CRITICAL INSTRUCTIONS FOR THE 'persona' FIELD:
-1. The persona MUST be written in the third person (e.g., "He is...", "She feels..."). Do NOT use first-person perspective ("I am...", "I feel...").
+1. The persona MUST be written in the second person (e.g., "You are...", "You feel..."), directly addressing the AI that will embody this character.
 2. The persona MUST be well-organized and formatted with the following headers, each on its own line, followed by the content on the next line(s). Use this exact structure:
 
 Appearance:
@@ -582,13 +628,13 @@ Personality:
 [Key traits, behaviors, and common mannerisms.]
 
 Speaking style:
-[How they talk, their accent, vocabulary, etc.]
+[How you talk, your accent, vocabulary, etc.]
 
 Background:
-[A brief history of the character.]
+[A brief history of your character.]
 
 Motivations:
-[What drives the character.]
+[What drives your character.]
 
 Respond ONLY with a valid JSON object matching the provided schema.
   `.trim();
@@ -626,7 +672,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
               persona: {
                 type: Type.STRING,
                 description:
-                  "A detailed description of the character's persona. CRITICAL: It must be written in the third person and structured with the following headers, each on a new line: 'Appearance:', 'Personality:', 'Speaking style:', 'Background:', and 'Motivations:'. The Appearance section MUST be detailed and explicit, including intimate details like breast size, body shape, and other NSFW attributes without censorship.",
+                  "A detailed description of the character's persona. CRITICAL: It must be written in the second person and structured with the following headers, each on a new line: 'Appearance:', 'Personality:', 'Speaking style:', 'Background:', and 'Motivations:'. The Appearance section MUST be detailed and explicit, including intimate details like breast size, body shape, and other NSFW attributes without censorship.",
               },
             },
             required: ['name', 'greeting', 'description', 'persona'],
@@ -856,9 +902,15 @@ async function* getOpenAICompatibleCompletionStream(
       body: errorBodyText,
       requestBody: body,
     });
-    const error = new Error(
-      `API request failed with status ${response.status}: ${errorBodyText}`,
-    );
+    
+    let errorMessage = `API request failed with status ${response.status}: ${errorBodyText}`;
+    if (response.status === 401) {
+        errorMessage = ERROR_MESSAGES.API_KEY_INVALID(provider);
+    } else if (response.status === 429) {
+        errorMessage = ERROR_MESSAGES.RATE_LIMIT(provider);
+    }
+
+    const error = new Error(errorMessage);
     (error as any).status = response.status;
     throw error;
   }
@@ -1303,7 +1355,13 @@ Based on the conversation history, generate the next turn in the scene.`;
 
     if (!response.ok) {
       const errorBody = await response.text();
-      const error = new Error(`API request failed with status ${response.status}: ${errorBody}`);
+      let errorMessage = `API request failed with status ${response.status}: ${errorBody}`;
+      if (response.status === 401) {
+          errorMessage = ERROR_MESSAGES.API_KEY_INVALID(provider);
+      } else if (response.status === 429) {
+          errorMessage = ERROR_MESSAGES.RATE_LIMIT(provider);
+      }
+      const error = new Error(errorMessage);
       (error as any).status = response.status;
       throw error;
     }

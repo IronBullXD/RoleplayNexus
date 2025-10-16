@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { World, WorldEntry } from '../types';
 import { Tooltip } from './Tooltip';
-import { useAppStore } from '../store/useAppStore';
+import { useWorldStore } from '../store/stores/worldStore';
 
 // Utility to escape strings for regex
 const escapeRegex = (str: string) =>
@@ -113,7 +113,7 @@ const SimpleMarkdown: React.FC<{ text: string; world?: World | null }> = ({
   text,
   world,
 }) => {
-  const { logWorldEntryInteraction } = useAppStore();
+  const { logWorldEntryInteraction } = useWorldStore();
 
   const handleEntryView = useCallback(
     (worldId: string, entryId: string) => {

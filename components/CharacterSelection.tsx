@@ -1,11 +1,12 @@
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
-import { Character, ChatSession, GroupChatSession, Message } from '../types';
+import { Character, GroupChatSession, Message } from '../types';
 import { Icon, IconButton } from './Icon';
 import SimpleMarkdown from './SimpleMarkdown';
 import { GM_CHARACTER_ID } from '../constants';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
 import { useUIStore } from '../store/stores/uiStore';
+import { useCharacterStore } from '../store/stores/characterStore';
+import { useChatStore, GroupSession } from '../store/stores/chatStore';
 
 interface CharacterSelectionProps {
   onNewCharacter: () => void;
@@ -56,16 +57,26 @@ type RecentSession = {
 
 interface RecentChatCardProps {
   session: RecentSession;
-  onClick: () => void;
+  onSelectSingle: (characterId: string, sessionId: string) => void;
+  onSelectGroup: (sessionId: string) => void;
 }
 
-const RecentChatCard: React.FC<RecentChatCardProps> = ({
+const RecentChatCard: React.FC<RecentChatCardProps> = React.memo(({
   session,
-  onClick,
+  onSelectSingle,
+  onSelectGroup,
 }) => {
+  const handleClick = useCallback(() => {
+    if (session.type === 'single' && session.characterId) {
+      onSelectSingle(session.characterId, session.id);
+    } else if (session.type === 'group') {
+      onSelectGroup(session.id);
+    }
+  }, [session, onSelectSingle, onSelectGroup]);
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className="w-full bg-slate-900 border border-slate-800 rounded-lg hover:border-crimson-500/80 transition-all duration-300 group text-left p-3 flex items-center gap-3"
     >
       <div className="flex -space-x-3 shrink-0">
@@ -101,9 +112,11 @@ const RecentChatCard: React.FC<RecentChatCardProps> = ({
       </div>
     </button>
   );
-};
+});
+RecentChatCard.displayName = 'RecentChatCard';
 
-function ViewAllHistoryCard({ onClick }: { onClick: () => void }) {
+
+const ViewAllHistoryCard = React.memo(({ onClick }: { onClick: () => void }) => {
   return (
     <button
       onClick={onClick}
@@ -120,7 +133,9 @@ function ViewAllHistoryCard({ onClick }: { onClick: () => void }) {
       </div>
     </button>
   );
-}
+});
+ViewAllHistoryCard.displayName = 'ViewAllHistoryCard';
+
 
 const CharacterCard: React.FC<{
   character: Character;
@@ -243,6 +258,7 @@ const CharacterCard: React.FC<{
     </div>
   );
 });
+CharacterCard.displayName = 'CharacterCard';
 
 function NewCharacterCard({ onClick }: { onClick: () => void }) {
   return (
@@ -275,37 +291,31 @@ function CharacterSelection({
   onNavigateToPersona,
   onNavigateToDebug,
 }: CharacterSelectionProps) {
-  const {
-    characters,
-    sessions,
-    groupSessions,
-    characterSessions,
-    messages: allMessages,
-    newSession,
-    deleteCharacter,
-    importCharacters,
-    duplicateCharacter,
-  } = useAppStore();
+  const { characters, deleteCharacter, importCharacters, duplicateCharacter } = useCharacterStore();
+  const { sessions, groupSessions, characterSessions, messages: allMessages, newSession } = useChatStore();
   const { setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('last-played');
 
-  const handleSelectSession = (characterId: string, sessionId: string) => {
+  const handleSelectSession = useCallback((characterId: string, sessionId: string) => {
     setActiveCharacterId(characterId);
     setActiveSessionId(sessionId);
     setCurrentView('CHAT');
-  };
-  const handleSelectGroupSession = (sessionId: string) => {
+  }, [setActiveCharacterId, setActiveSessionId, setCurrentView]);
+
+  const handleSelectGroupSession = useCallback((sessionId: string) => {
     setActiveGroupSessionId(sessionId);
     setCurrentView('GROUP_CHAT');
-  };
-  const handleStartChat = (characterId: string) => {
+  }, [setActiveGroupSessionId, setCurrentView]);
+
+  const handleStartChat = useCallback((characterId: string) => {
     const sessionId = newSession(characterId);
     if (sessionId) {
       handleSelectSession(characterId, sessionId);
     }
-  };
+  }, [newSession, handleSelectSession]);
 
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -377,8 +387,9 @@ function CharacterSelection({
       },
     );
 
+    // FIX: Add explicit type `GroupSession` to `s` to resolve property access errors.
     const groupSessionsMapped = Object.values(groupSessions).map(
-      (s) => {
+      (s: GroupSession) => {
         const sessionChars = s.characterIds
           .map((id) => characters.find((c) => c.id === id))
           .filter(Boolean) as Character[];
@@ -415,8 +426,9 @@ function CharacterSelection({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
+    // FIX: Add explicit type annotation to destructuring to resolve property access errors.
     Object.entries(characterSessions).forEach(
-      ([charId, sessionIds]) => {
+      ([charId, sessionIds]: [string, string[]]) => {
         let maxTimestamp = 0;
         sessionIds.forEach((sessionId) => {
             const session = sessions[sessionId];
@@ -532,12 +544,8 @@ function CharacterSelection({
                 <RecentChatCard
                   key={`${session.type}-${session.id}`}
                   session={session}
-                  onClick={() => {
-                    if (session.type === 'single' && session.characterId)
-                      handleSelectSession(session.characterId, session.id);
-                    else if (session.type === 'group')
-                      handleSelectGroupSession(session.id);
-                  }}
+                  onSelectSingle={handleSelectSession}
+                  onSelectGroup={handleSelectGroupSession}
                 />
               ))}
               {totalRecentCount > RECENT_CHAT_LIMIT && (

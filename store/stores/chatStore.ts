@@ -5,9 +5,10 @@ import { useUIStore } from './uiStore';
 import { useSettingsStore } from './settingsStore';
 import { useWorldStore } from './worldStore';
 import { useCharacterStore } from './characterStore';
-import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages } from '../../services/llmService';
+import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages, isApiError } from '../../services/llmService';
 import { generateResponseWithThinking } from '../../services/thinkingService';
 import { logger } from '../../services/logger';
+import { ERROR_MESSAGES } from '../../services/errorMessages';
 
 // --- Types & Interfaces ---
 export type Session = Omit<ChatSession, 'messages'> & { messageIds: string[] };
@@ -32,10 +33,8 @@ export interface ChatActions {
   sendGroupMessage: (content: string) => Promise<void>;
   editGroupMessage: (sessionId: string, messageId: string, newContent: string) => void;
   deleteGroupMessage: (sessionId: string, messageId: string) => void;
-  // FIX: Updated `regenerateGroupResponse` to accept a `sessionId` for consistency and to resolve argument mismatch errors.
-  regenerateGroupResponse: (sessionId: string) => Promise<void>;
-  // FIX: Updated `continueGroupGeneration` to accept a `sessionId` for consistency and to resolve argument mismatch errors.
-  continueGroupGeneration: (sessionId: string) => Promise<void>;
+  regenerateGroupResponse: () => Promise<void>;
+  continueGroupGeneration: () => Promise<void>;
   forkGroupChat: (sessionId: string, messageId: string) => string;
   createGroupChat: (characterIds: string[], scenario: string) => string;
   deleteGroupSession: (sessionId: string) => void;
@@ -56,20 +55,13 @@ const MEMORY_SLICE_PERCENT = 0.5;
 const RENDER_INTERVAL = 100; // ms
 const estimateTokens = (text: string): number => Math.ceil((text || '').length / 4);
 const extractErrorMessage = (error: unknown): string => {
-    if (error instanceof Error && error.name === 'AbortError') return 'Generation stopped by user.';
-    const status = (error as any).status;
-    if (status) {
-        if (status === 401 || status === 403) return `Authentication error (Code: ${status}). Please check your API key.`;
-        if (status === 429) return `Rate limit exceeded (Code: ${status}). Please wait and try again.`;
-        if (status >= 500) return `Server error (Code: ${status}). The service may be temporarily unavailable.`;
+    if (error instanceof Error) {
+        if (error.name === 'AbortError') return 'Generation stopped by user.';
+        return error.message; // Assume llmService now provides standardized, user-friendly messages
     }
-    if (typeof error === 'object' && error !== null) {
-      const msg = (error as any).response?.data?.error?.message || (error as any).response?.data?.message || (error as any).error?.message || (error as any).message;
-      if (typeof msg === 'string' && msg.trim()) return msg;
-    }
-    if (error instanceof Error) return error.message;
-    return "An unknown error occurred.";
-  };
+    if (typeof error === 'string') return error;
+    return ERROR_MESSAGES.UNKNOWN_ERROR;
+};
 
 // --- Store Definition ---
 export const useChatStore = create<ChatStore>()(
@@ -93,9 +85,11 @@ export const useChatStore = create<ChatStore>()(
         
         try {
           const { provider, apiKeys, models } = settings;
-          const model = models?.[provider] || '';
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
-          if (!apiKey || !model) throw new Error(`API key or model for ${provider} is not configured.`);
+          // FIX: Explicitly type the provider to prevent it from being widened to `string`.
+          const currentProvider: LLMProvider = provider;
+          const model = models?.[currentProvider] || '';
+          const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
+          if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
           const sysMsg: Message = { id: crypto.randomUUID(), role: 'system', content: '[System: Distant memories were summarized to preserve context.]', timestamp: Date.now() };
@@ -147,8 +141,10 @@ export const useChatStore = create<ChatStore>()(
             if (!character) throw new Error("Active character not found");
 
             const { provider, apiKeys, models, systemPrompt } = settings;
-            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
-            const model = models?.[provider] || '';
+            // FIX: Explicitly type the provider to prevent it from being widened to `string`.
+            const currentProvider: LLMProvider = provider;
+            const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
+            const model = models?.[currentProvider] || '';
             const world = worlds.find(w => w.id === session.worldId);
             const worldId = world?.id || '';
 
@@ -242,8 +238,10 @@ export const useChatStore = create<ChatStore>()(
           const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
       
           const { provider, apiKeys, models, systemPrompt } = settings;
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
-          const model = models?.[provider] || '';
+          // FIX: Explicitly type the provider to prevent it from being widened to `string`.
+          const currentProvider: LLMProvider = provider;
+          const apiKey = currentProvider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[currentProvider];
+          const model = models?.[currentProvider] || '';
           const world = worlds.find(w => w.id === session.worldId);
           const worldId = world?.id || '';
       
@@ -295,20 +293,20 @@ export const useChatStore = create<ChatStore>()(
           });
       
         } catch (error) {
-          const errorMessage = `Error: ${extractErrorMessage(error)}`;
-          setError(errorMessage);
-          const errorMessageObj: Message = { id: crypto.randomUUID(), role: 'assistant', content: errorMessage, timestamp: Date.now() };
-          set((state: ChatStore) => {
-              const currentSession = state.groupSessions[sessionId];
-              if (!currentSession) return state;
-              return {
-                  messages: { ...state.messages, [errorMessageObj.id]: errorMessageObj },
-                  groupSessions: { ...state.groupSessions, [sessionId]: { ...currentSession, messageIds: [...currentSession.messageIds, errorMessageObj.id] } }
-              };
-          });
+            const errorMessage = `Error: ${extractErrorMessage(error)}`;
+            setError(errorMessage);
+            const errorMessageObj: Message = { id: crypto.randomUUID(), role: 'assistant', content: errorMessage, timestamp: Date.now() };
+            set((state: ChatStore) => {
+                const currentSession = state.groupSessions[sessionId];
+                if (!currentSession) return state;
+                return {
+                    messages: { ...state.messages, [errorMessageObj.id]: errorMessageObj },
+                    groupSessions: { ...state.groupSessions, [sessionId]: { ...currentSession, messageIds: [...currentSession.messageIds, errorMessageObj.id] } }
+                };
+            });
         } finally {
-          setIsLoading(false);
-          setAbortController(null);
+            setIsLoading(false);
+            setAbortController(null);
         }
       };
 
@@ -548,7 +546,10 @@ export const useChatStore = create<ChatStore>()(
             };
           });
         },
-        regenerateGroupResponse: async (sessionId: string) => {
+        regenerateGroupResponse: async () => {
+          const { activeGroupSessionId } = useUIStore.getState();
+          if (!activeGroupSessionId) return;
+          const sessionId = activeGroupSessionId;
           const session = get().groupSessions[sessionId];
           if (!session) return;
           const allMessages = session.messageIds.map(id => get().messages[id]);
@@ -562,7 +563,10 @@ export const useChatStore = create<ChatStore>()(
       
           await executeGroupChatGeneration(sessionId, messagesToProcess);
         },
-        continueGroupGeneration: async (sessionId: string) => {
+        continueGroupGeneration: async () => {
+          const { activeGroupSessionId } = useUIStore.getState();
+          if (!activeGroupSessionId) return;
+          const sessionId = activeGroupSessionId;
           const session = get().groupSessions[sessionId];
           if (!session) return;
           const messagesToProcess = session.messageIds.map(id => get().messages[id]);

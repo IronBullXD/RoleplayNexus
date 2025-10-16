@@ -12,12 +12,15 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Replaced constructor with modern class field syntax for state initialization.
-  // This resolves TypeScript errors where `this.state` and `this.props` were not being correctly inferred on the class instance.
-  public state: State = {
-    hasError: false,
-    error: undefined,
-  };
+  // FIX: Refactored to use a constructor for state and method binding for maximum compatibility.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+    };
+    this.handleRetry = this.handleRetry.bind(this);
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -55,7 +58,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
               </p>
             </div>
             <button
-              onClick={() => this.handleRetry()}
+              onClick={this.handleRetry}
               className="px-3 py-1 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-md transition-colors"
             >
               Retry

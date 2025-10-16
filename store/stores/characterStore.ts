@@ -6,6 +6,7 @@ import { useUIStore } from './uiStore';
 import { useChatStore } from './chatStore';
 import { useSettingsStore } from './settingsStore';
 import { GM_CHARACTER, GM_CHARACTER_ID, DEFAULT_CHARACTER } from '../../constants';
+import { ERROR_MESSAGES } from '../../services/errorMessages';
 
 export interface CharacterState {
   characters: Character[];
@@ -87,8 +88,8 @@ export const useCharacterStore = create<CharacterStore>()(
         const model = models?.[provider] || '';
         const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
 
-        if (!apiKey) throw new Error(`API key for ${provider} is not set.`);
-        if (!model) throw new Error(`Model for ${provider} is not set.`);
+        if (!apiKey) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
+        if (!model) throw new Error(`Model for ${provider} is not configured. Please check your settings.`);
 
         const profile = await generateProfile({ provider, apiKey, model, concept });
         return {

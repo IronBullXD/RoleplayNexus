@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { World, WorldEntry, WorldEntryCategory, ValidationIssue } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
-import { useAppStore } from '../store/useAppStore';
+import { useUIStore } from '../store/stores/uiStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
 import { Tooltip } from './Tooltip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { validateWorld, runConsistencyCheck } from '../services/worldValidationService';
@@ -90,11 +91,11 @@ const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
   );
 });
 
-const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
+const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
   entry,
   allEntries,
   onEntryChange,
-}) => {
+}: EntryEditorProps) {
   const keyInputRef = useRef<HTMLInputElement>(null);
 
   const linkedEntries: WorldEntry[] = useMemo(() => {
@@ -159,16 +160,15 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
     return duplicates;
   }, [entry.id, entry.keys, allEntries]);
 
-  const processAndAddKeywords = () => {
+  const processAndAddKeywords = useCallback(() => {
     const inputElement = keyInputRef.current;
     if (!inputElement || !inputElement.value.trim()) {
       return;
     }
     const inputValue = inputElement.value;
-    const currentKeys = entry.keys || [];
-    const lowercasedCurrentKeys = currentKeys.map((k) =>
-      typeof k === 'string' ? k.toLowerCase() : '',
-    );
+    // FIX: Explicitly type currentKeys to ensure correct type inference for spread operator.
+    const currentKeys: string[] = entry.keys || [];
+    const lowercasedCurrentKeys = currentKeys.map((k) => k.toLowerCase());
 
     const newKeys = inputValue
       .split(',')
@@ -183,17 +183,17 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
       ]);
     }
     inputElement.value = '';
-  };
+  }, [entry.id, entry.keys, onEntryChange]);
 
-  const handleRemoveKeyword = (keyToRemove: string) => {
+  const handleRemoveKeyword = useCallback((keyToRemove: string) => {
     onEntryChange(
       entry.id,
       'keys',
       (entry.keys || []).filter((k) => k !== keyToRemove),
     );
-  };
+  }, [entry.id, entry.keys, onEntryChange]);
 
-  const handleKeyInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === ',' || e.key === 'Enter') {
       e.preventDefault();
       processAndAddKeywords();
@@ -206,15 +206,14 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
       const lastKey = entry.keys![entry.keys!.length - 1];
       handleRemoveKeyword(lastKey);
     }
-  };
+  }, [processAndAddKeywords, handleRemoveKeyword, entry.keys]);
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedText = e.clipboardData.getData('text');
-    const currentKeys = entry.keys || [];
-    const lowercasedCurrentKeys = currentKeys.map((k) =>
-      typeof k === 'string' ? k.toLowerCase() : '',
-    );
+    // FIX: Explicitly type currentKeys to ensure correct type inference for spread operator.
+    const currentKeys: string[] = entry.keys || [];
+    const lowercasedCurrentKeys = currentKeys.map((k) => k.toLowerCase());
 
     const pastedKeys = pastedText
       .split(/,|\n/)
@@ -231,7 +230,7 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
     if (keyInputRef.current) {
       keyInputRef.current.value = '';
     }
-  };
+  }, [entry.id, entry.keys, onEntryChange]);
 
   const InspectorSection: React.FC<{
     title: string;
@@ -405,14 +404,17 @@ const EntryInspectorPanel: React.FC<EntryEditorProps> = ({
       </InspectorSection>
     </div>
   );
-};
+});
+EntryInspectorPanel.displayName = 'EntryInspectorPanel';
+
 
 const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   world,
   onSave,
   onClose,
 }) => {
-  const { requestConfirmation, settings } = useAppStore();
+  const requestConfirmation = useUIStore(state => state.requestConfirmation);
+  const settings = useSettingsStore(state => state.settings);
   const [formData, setFormData] = useState<Partial<World>>({
     name: '',
     avatar: '',
@@ -462,19 +464,25 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     setValidationIssues([]);
   }, [world]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData((p) => ({ ...p, avatar: reader.result as string }));
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setFormData((p) => ({ ...p, [e.target.name]: e.target.value })),
+    [],
+  );
 
-  const handleEntryChange = <K extends keyof WorldEntry>(
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0]) {
+        const reader = new FileReader();
+        reader.onloadend = () =>
+          setFormData((p) => ({ ...p, avatar: reader.result as string }));
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    },
+    [],
+  );
+
+  const handleEntryChange = useCallback(<K extends keyof WorldEntry>(
     id: string,
     field: K,
     value: WorldEntry[K],
@@ -488,9 +496,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
         return entry;
       }),
     }));
-  };
+  }, []);
 
-  const handleAddNewEntry = () => {
+  const handleAddNewEntry = useCallback(() => {
     const newEntry: WorldEntry = {
       id: crypto.randomUUID(),
       name: 'New Entry',
@@ -504,7 +512,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
       entries: [...(prev.entries || []), newEntry],
     }));
     setActiveEntryId(newEntry.id);
-  };
+  }, []);
 
   const handleSelectEntry = useCallback((id: string) => {
     setActiveEntryId(id);
@@ -539,7 +547,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     [requestConfirmation],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const finalEntries = (formData.entries || []).map((entry) => ({
       ...entry,
@@ -554,7 +562,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
       entries: finalEntries,
     };
     onSave(worldToSave);
-  };
+  }, [formData, onSave]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -564,7 +572,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, isValidationPanelOpen, isCheckingConsistency]);
 
-  const handleValidate = async () => {
+  const handleValidate = useCallback(async () => {
     const currentWorld = formData as World;
     const localIssues = validateWorld(currentWorld);
     let allIssues = [...localIssues];
@@ -597,12 +605,12 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     
     setValidationIssues(allIssues);
     setIsValidationPanelOpen(true);
-  };
+  }, [formData, includeAiCheck, settings]);
 
-  const handleSelectEntryFromIssue = (entryId: string) => {
+  const handleSelectEntryFromIssue = useCallback((entryId: string) => {
     setActiveEntryId(entryId);
     setIsValidationPanelOpen(false);
-  };
+  }, []);
   
   const activeEntry = useMemo(
     () => formData.entries?.find((e) => e.id === activeEntryId),

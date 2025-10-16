@@ -11,7 +11,6 @@ import SimpleMarkdown from './SimpleMarkdown';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import Avatar from './Avatar';
 import ChatSettingsPopover from './ChatSettingsPopover';
-import { useAppStore } from '../store/useAppStore';
 import { Tooltip } from './Tooltip';
 import { usePaginatedMessages } from '../hooks/usePaginatedMessages';
 import {
@@ -20,6 +19,11 @@ import {
   ActionButton,
 } from './ChatCommon';
 import ChatMessageSkeleton from './ChatMessageSkeleton';
+import { useUIStore } from '../store/stores/uiStore';
+import { useChatStore } from '../store/stores/chatStore';
+import { useCharacterStore } from '../store/stores/characterStore';
+import { useSettingsStore } from '../store/stores/settingsStore';
+import { useWorldStore } from '../store/stores/worldStore';
 
 interface GroupChatWindowProps {
   onNavigateToHistory: () => void;
@@ -266,15 +270,10 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
-  const {
-    activeGroupSessionId,
+  const { activeGroupSessionId, isLoading, error, setCurrentView, stopGeneration } = useUIStore();
+  const { 
     groupSessions,
     messages: allMessages,
-    characters,
-    userPersona,
-    settings,
-    worlds,
-    setCurrentView,
     setSessionWorld,
     setSessionTemperature,
     setSessionContextSize,
@@ -286,8 +285,11 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     forkGroupChat,
     sendGroupMessage,
     continueGroupGeneration,
-    stopGeneration,
-  } = useAppStore();
+  } = useChatStore();
+
+  const characters = useCharacterStore(state => state.characters);
+  const { userPersona, settings } = useSettingsStore();
+  const worlds = useWorldStore(state => state.worlds);
 
   const session = useMemo(
     () => (activeGroupSessionId ? groupSessions[activeGroupSessionId] : null),
@@ -298,9 +300,6 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     () => worlds.find((w) => w.id === session?.worldId),
     [worlds, session?.worldId],
   );
-
-  const isLoading = useAppStore((state) => state.isLoading);
-  const error = useAppStore((state) => state.error);
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -376,8 +375,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
       sendGroupMessage(input.trim());
       setInput('');
     } else if (messages.length > 0 && activeGroupSessionId) {
-      // FIX: Pass the activeGroupSessionId to continueGroupGeneration to resolve argument mismatch.
-      continueGroupGeneration(activeGroupSessionId);
+      continueGroupGeneration();
     }
   }, [isLoading, input, messages, activeGroupSessionId, sendGroupMessage, continueGroupGeneration]);
 
@@ -524,8 +522,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
                 isLastMessage={msg.id === lastMessage?.id}
                 isLoading={isLoading}
                 onDelete={(messageId) => activeGroupSessionId && deleteGroupMessage(activeGroupSessionId, messageId)}
-                // FIX: Pass the activeGroupSessionId to regenerateGroupResponse to resolve argument mismatch.
-                onRegenerate={() => activeGroupSessionId && regenerateGroupResponse(activeGroupSessionId)}
+                onRegenerate={() => regenerateGroupResponse()}
                 onFork={(messageId) => activeGroupSessionId && forkGroupChat(activeGroupSessionId, messageId)}
                 isEditing={msg.id === editingMessageId}
                 editingText={editingText}
