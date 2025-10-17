@@ -27,12 +27,24 @@ export const useWorldStore = create<WorldStore>()(
       worldEntryInteractions: {},
 
       // --- Actions ---
-      saveWorld: (world) =>
-        set((state) => ({
-          worlds: state.worlds.find((w) => w.id === world.id)
-            ? state.worlds.map((w) => (w.id === world.id ? world : w))
-            : [...state.worlds, world],
-        })),
+      saveWorld: (world) => {
+        set((state) => {
+          const now = Date.now();
+          const existingWorld = state.worlds.find((w) => w.id === world.id);
+
+          if (existingWorld) {
+            // Update existing world
+            const updatedWorld = { ...existingWorld, ...world, lastModified: now };
+            return {
+              worlds: state.worlds.map((w) => (w.id === world.id ? updatedWorld : w)),
+            };
+          } else {
+            // Create new world
+            const newWorld = { ...world, createdAt: now, lastModified: now };
+            return { worlds: [...state.worlds, newWorld] };
+          }
+        });
+      },
 
       deleteWorld: (id) => {
         const { worlds } = get();

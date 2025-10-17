@@ -104,9 +104,12 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
     greeting: '',
     description: '',
     persona: '',
+    tags: [],
   });
   const [structuredPersona, setStructuredPersona] =
     useState<StructuredPersona>(initialStructuredPersona);
+  const [tags, setTags] = useState<string[]>([]);
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAIAssistOpen, setIsAIAssistOpen] = useState(false);
   const [aiConcept, setAiConcept] = useState('');
@@ -121,8 +124,10 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
         greeting: '',
         description: '',
         persona: '',
+        tags: [],
       },
     );
+    setTags(character?.tags || []);
   }, [character]);
 
   useEffect(() => {
@@ -142,6 +147,32 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
       })),
     [],
   );
+  
+  const handleAddTag = useCallback(() => {
+    const input = tagInputRef.current;
+    if (!input || !input.value.trim()) return;
+    const newTags = input.value.split(',').map(t => t.trim()).filter(Boolean);
+    const uniqueNewTags = newTags.filter(t => !tags.includes(t));
+    if (uniqueNewTags.length > 0) {
+        setTags(prev => [...prev, ...uniqueNewTags]);
+    }
+    input.value = '';
+  }, [tags]);
+
+  const handleRemoveTag = useCallback((tagToRemove: string) => {
+      setTags(prev => prev.filter(t => t !== tagToRemove));
+  }, []);
+
+  const handleTagInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          handleAddTag();
+      }
+      if (e.key === 'Backspace' && tagInputRef.current?.value === '' && tags.length > 0) {
+          handleRemoveTag(tags[tags.length - 1]);
+      }
+  }, [handleAddTag, handleRemoveTag, tags]);
+
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,12 +197,13 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
         greeting: formData.greeting || '',
         description: formData.description || '',
         persona: serializePersona(structuredPersona),
+        tags: tags.map(t => t.trim()).filter(Boolean),
         isImmutable: formData.isImmutable,
       };
       saveCharacter(characterToSave);
       onClose();
     },
-    [formData, structuredPersona, saveCharacter, onClose],
+    [formData, structuredPersona, tags, saveCharacter, onClose],
   );
 
   useEffect(() => {
@@ -390,6 +422,39 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
                   className="mt-1 block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 placeholder:text-slate-600 custom-scrollbar"
                   placeholder="A brief summary shown in the character list."
                 />
+              </div>
+              <div>
+                <label htmlFor="tags" className="block text-sm font-medium text-slate-300">
+                  Tags
+                </label>
+                <div
+                  onClick={() => tagInputRef.current?.click()}
+                  className="mt-1 flex flex-wrap items-center gap-2 p-2 bg-slate-950 border-2 border-slate-700 rounded-lg focus-within:ring-2 focus-within:ring-crimson-500 focus-within:border-crimson-500 cursor-text"
+                >
+                  {tags.map((tag) => (
+                    <div
+                      key={tag}
+                      className="flex items-center gap-1.5 pl-2 pr-1 py-0.5 text-sm text-ember-200 bg-ember-900/70 rounded-md"
+                    >
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="p-0.5 rounded-full hover:bg-ember-700"
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <Icon name="close" className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <input
+                    ref={tagInputRef}
+                    type="text"
+                    onKeyDown={handleTagInputKeyDown}
+                    className="flex-grow bg-transparent outline-none text-sm p-1 placeholder:text-slate-600 min-w-[120px]"
+                    placeholder="Add tags..."
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 font-display tracking-wider">

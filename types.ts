@@ -30,6 +30,7 @@ export interface Character {
   description: string;
   persona: string;
   isImmutable?: boolean;
+  tags?: string[];
 }
 
 export interface StructuredPersona {
@@ -76,6 +77,20 @@ export interface World {
   avatar?: string;
   description: string;
   entries: WorldEntry[];
+  category?: string;
+  tags?: string[];
+  createdAt?: number;
+  lastModified?: number;
+}
+
+export interface WorldTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  avatar?: string;
+  entries: WorldEntry[];
+  tags?: string[];
 }
 
 export interface ChatSession {
@@ -159,6 +174,15 @@ export interface ValidationIssue {
     otherEntryNames?: string[];
     path?: string[];
     duplicateOf?: string;
+  };
+}
+
+export interface ContentSuggestion {
+  type: 'missing_keyword' | 'incomplete_entry' | 'contradiction' | 'expansion';
+  message: string;
+  entryIds: string[];
+  relatedData?: {
+    keywordToAdd?: string;
   };
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { World, WorldEntry, WorldEntryCategory, ValidationIssue } from '../types';
+import { World, WorldEntry, WorldEntryCategory, ValidationIssue, ContentSuggestion } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useUIStore } from '../store/stores/uiStore';
@@ -10,6 +10,8 @@ import { validateWorld, runConsistencyCheck } from '../services/worldValidationS
 import ValidationResultsPanel from './ValidationResultsPanel';
 import { LLMProvider } from '../types';
 import { useVirtualScroll } from '../hooks/useVirtualScroll';
+import { WORLD_CATEGORIES } from '../constants';
+import { generateContentSuggestions } from '../services/worldSuggestionService';
 
 interface WorldEditorPageProps {
   world: Partial<World> | null;
@@ -406,6 +408,107 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
 });
 EntryInspectorPanel.displayName = 'EntryInspectorPanel';
 
+const SuggestionsPanel: React.FC<{
+  suggestions: ContentSuggestion[];
+  onClose: () => void;
+  onSelectEntry: (entryId: string) => void;
+  onApplyFix: (suggestion: ContentSuggestion) => void;
+  worldName: string;
+  entries: WorldEntry[];
+}> = ({ suggestions, onClose, onSelectEntry, onApplyFix, worldName, entries }) => {
+    const entryNameMap = useMemo(() =>
+        new Map(entries.map(e => [e.id, e.name || 'Unnamed Entry']))
+    , [entries]);
+    
+    const suggestionMetadata: Record<ContentSuggestion['type'], { icon: string; color: string; title: string }> = {
+      missing_keyword: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Missing Keywords' },
+      incomplete_entry: { icon: 'lightbulb', color: 'text-sky-400', title: 'Incomplete Entries' },
+      expansion: { icon: 'sparkles', color: 'text-emerald-400', title: 'Expansion Ideas' },
+      contradiction: { icon: 'zap', color: 'text-purple-400', title: 'Potential Contradictions' },
+    };
+    
+    const groupedSuggestions = suggestions.reduce((acc, suggestion) => {
+        if (!acc[suggestion.type]) acc[suggestion.type] = [];
+        acc[suggestion.type].push(suggestion);
+        return acc;
+    }, {} as Record<ContentSuggestion['type'], ContentSuggestion[]>);
+
+    const suggestionTypes = Object.keys(groupedSuggestions) as ContentSuggestion['type'][];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 z-[60] flex items-center justify-center backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 20, opacity: 0 }}
+                className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col border border-slate-700"
+                onClick={e => e.stopPropagation()}
+            >
+                <header className="p-4 border-b border-slate-800 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <Icon name="sparkles" className="w-6 h-6 text-emerald-400" />
+                        <h2 className="text-xl font-bold font-display tracking-widest uppercase">AI Suggestions for "{worldName}"</h2>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"><Icon name="close" /></button>
+                </header>
+                <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    {suggestions.length === 0 ? (
+                        <div className="text-center text-slate-500 py-16">
+                            <Icon name="shield-check" className="w-16 h-16 text-emerald-500" />
+                            <h3 className="text-xl font-semibold text-slate-300 mt-2">Looks Good!</h3>
+                            <p>The AI couldn't find any specific improvement suggestions.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {suggestionTypes.map(type => (
+                                <div key={type}>
+                                    <h3 className={`flex items-center gap-2 text-lg font-semibold font-display tracking-wider ${suggestionMetadata[type].color}`}>
+                                        <Icon name={suggestionMetadata[type].icon} className="w-5 h-5" />
+                                        {suggestionMetadata[type].title} ({groupedSuggestions[type].length})
+                                    </h3>
+                                    <div className="mt-3 space-y-2 border-l-2 border-slate-700 pl-4">
+                                        {groupedSuggestions[type].map((suggestion, index) => (
+                                            <div key={index} className="bg-slate-800/50 p-3 rounded-md">
+                                                <p className="text-sm text-slate-300">{suggestion.message}</p>
+                                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                                    {suggestion.entryIds.map(id => (
+                                                        <button
+                                                            key={id}
+                                                            onClick={() => onSelectEntry(id)}
+                                                            className="px-2 py-1 text-xs font-semibold text-sky-300 bg-sky-900/50 rounded-md hover:bg-sky-800/50"
+                                                        >
+                                                            Go to: "{entryNameMap.get(id) || 'Unknown'}"
+                                                        </button>
+                                                    ))}
+                                                    {suggestion.type === 'missing_keyword' && suggestion.relatedData?.keywordToAdd && (
+                                                        <button
+                                                            onClick={() => onApplyFix(suggestion)}
+                                                            className="px-2 py-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 rounded-md hover:bg-emerald-800/50 flex items-center gap-1"
+                                                        >
+                                                            <Icon name="add" className="w-3 h-3" />
+                                                            Add Keyword
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </main>
+            </motion.div>
+        </motion.div>
+    );
+};
+
 const QuickJumpModal = ({ entries, onSelect, onClose }: {
     entries: WorldEntry[];
     onSelect: (entryId: string) => void;
@@ -491,6 +594,8 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     avatar: '',
     description: '',
     entries: [],
+    tags: [],
+    category: '',
   });
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -502,7 +607,10 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
   const [recentEntryIds, setRecentEntryIds] = useState<string[]>([]);
   const [isQuickJumpOpen, setIsQuickJumpOpen] = useState(false);
-
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<ContentSuggestion[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     if (world) {
@@ -529,7 +637,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
           id: e.id || crypto.randomUUID(),
         }));
       }
-      setFormData({ ...world, entries: processedEntries });
+      setFormData({ tags: [], category: WORLD_CATEGORIES[5], ...world, entries: processedEntries });
       if (processedEntries && processedEntries.length > 0)
         setActiveEntryId(processedEntries[0].id);
       else setActiveEntryId(null);
@@ -631,6 +739,33 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     [requestConfirmation],
   );
 
+  const handleAddTag = useCallback(() => {
+    const input = tagInputRef.current;
+    const currentTags = formData.tags || [];
+    if (!input || !input.value.trim()) return;
+    const newTags = input.value.split(',').map(t => t.trim()).filter(Boolean);
+    const uniqueNewTags = newTags.filter(t => !currentTags.includes(t));
+    if (uniqueNewTags.length > 0) {
+        setFormData(prev => ({ ...prev, tags: [...(prev.tags || []), ...uniqueNewTags] }));
+    }
+    input.value = '';
+  }, [formData.tags]);
+
+  const handleRemoveTag = useCallback((tagToRemove: string) => {
+      setFormData(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tagToRemove) }));
+  }, []);
+
+  const handleTagInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          handleAddTag();
+      }
+      if (e.key === 'Backspace' && tagInputRef.current?.value === '' && (formData.tags || []).length > 0) {
+          handleRemoveTag(formData.tags![formData.tags!.length - 1]);
+      }
+  }, [handleAddTag, handleRemoveTag, formData.tags]);
+
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const finalEntries = (formData.entries || []).map((entry) => ({
@@ -644,6 +779,10 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
       description: formData.description || '', // Provide default for required field
       avatar: formData.avatar, // Optional field, can be undefined
       entries: finalEntries,
+      category: formData.category,
+      tags: formData.tags,
+      createdAt: formData.createdAt,
+      lastModified: formData.lastModified,
     };
     onSave(worldToSave);
   }, [formData, onSave]);
@@ -699,6 +838,60 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     setActiveEntryId(entryId);
     setIsValidationPanelOpen(false);
   }, []);
+
+  const handleAnalyzeWorld = useCallback(async () => {
+    setIsAnalyzing(true);
+    setSuggestions([]);
+    try {
+        const { provider, apiKeys, models } = settings;
+        const apiKey = provider === LLMProvider.GEMINI ? (process.env.API_KEY || '') : apiKeys[provider];
+        const model = models?.[provider];
+        if (!model || (provider !== LLMProvider.GEMINI && !apiKey)) {
+            throw new Error(`API key or model is not configured for ${provider}. Please check your settings.`);
+        }
+        
+        const generatedSuggestions = await generateContentSuggestions({
+            world: formData as World,
+            provider,
+            apiKey,
+            model,
+        });
+        setSuggestions(generatedSuggestions);
+        setIsSuggestionsPanelOpen(true);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        setSuggestions([{
+            type: 'expansion', // A neutral type
+            message: `AI analysis failed: ${errorMessage}`,
+            entryIds: []
+        }]);
+        setIsSuggestionsPanelOpen(true);
+    } finally {
+        setIsAnalyzing(false);
+    }
+  }, [formData, settings]);
+
+  const handleSelectEntryFromSuggestion = useCallback((entryId: string) => {
+      setActiveEntryId(entryId);
+      setIsSuggestionsPanelOpen(false);
+  }, []);
+
+  const handleApplySuggestion = useCallback((suggestion: ContentSuggestion) => {
+      if (suggestion.type === 'missing_keyword' && suggestion.relatedData?.keywordToAdd) {
+          const entryId = suggestion.entryIds[0];
+          const keyword = suggestion.relatedData.keywordToAdd;
+          if (entryId && keyword) {
+              const entry = formData.entries?.find(e => e.id === entryId);
+              if (entry) {
+                  const updatedKeys = [...(entry.keys || []), keyword];
+                  handleEntryChange(entryId, 'keys', updatedKeys);
+                  
+                  // Remove the applied suggestion from the list
+                  setSuggestions(prev => prev.filter(s => s !== suggestion));
+              }
+          }
+      }
+  }, [formData.entries, handleEntryChange]);
   
   const activeEntry = useMemo(
     () => formData.entries?.find((e) => e.id === activeEntryId),
@@ -803,23 +996,38 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
               {/* Left Column: Navigation & Entry List */}
               <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50">
                 <div className="p-4 border-b border-slate-800 shrink-0 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Avatar
-                      src={formData.avatar}
-                      alt={formData.name || 'World'}
-                      className="w-12 h-12"
-                      shape="square"
-                    />
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="w-full bg-transparent text-lg font-bold font-display tracking-wider border-0 focus:ring-0 p-0"
-                      placeholder="World Name"
-                      required
-                    />
-                  </div>
+                    <div className="flex items-start gap-4">
+                        <div className="relative group shrink-0">
+                            <Avatar src={formData.avatar} alt={formData.name || 'World'} className="w-20 h-20" shape="square" />
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Change avatar">
+                                <Icon name="edit" className="w-6 h-6 text-white" />
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/png, image/jpeg, image/webp, image/gif"/>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                             <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-transparent text-lg font-bold font-display tracking-wider border-0 focus:ring-0 p-0" placeholder="World Name" required />
+                             <input type="text" list="world-categories" name="category" value={formData.category} onChange={handleChange} className="w-full bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1 px-2 text-xs" placeholder="Category (e.g. Fantasy)" />
+                             <datalist id="world-categories">
+                                {WORLD_CATEGORIES.map(cat => <option key={cat} value={cat} />)}
+                             </datalist>
+                        </div>
+                    </div>
+                     <div>
+                        <div
+                          onClick={() => tagInputRef.current?.focus()}
+                          className="flex flex-wrap items-center gap-2 p-2 bg-slate-800/60 border-2 border-slate-700 rounded-lg focus-within:ring-2 focus-within:ring-crimson-500 focus-within:border-crimson-500 cursor-text"
+                        >
+                          {(formData.tags || []).map((tag) => (
+                            <div key={tag} className="flex items-center gap-1.5 pl-2 pr-1 py-0.5 text-xs text-ember-200 bg-ember-900/70 rounded-md">
+                              <span>{tag}</span>
+                              <button type="button" onClick={() => handleRemoveTag(tag)} className="p-0.5 rounded-full hover:bg-ember-700" aria-label={`Remove tag ${tag}`}>
+                                <Icon name="close" className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <input ref={tagInputRef} type="text" onKeyDown={handleTagInputKeyDown} className="flex-grow bg-transparent outline-none text-xs p-0.5 placeholder:text-slate-500 min-w-[80px]" placeholder="Add tags..."/>
+                        </div>
+                    </div>
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
                       <Icon
@@ -946,6 +1154,15 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                 >
                   <Icon name="shield-check" className="w-4 h-4" /> Validate World
                 </button>
+                <button
+                    type="button"
+                    onClick={handleAnalyzeWorld}
+                    disabled={isAnalyzing}
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600 disabled:opacity-50 disabled:cursor-wait"
+                >
+                  <Icon name="sparkles" className={`w-4 h-4 ${isAnalyzing ? 'animate-spin' : ''}`} />
+                  {isAnalyzing ? 'Analyzing...' : 'AI Suggestions'}
+                </button>
                 <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white">
                     <input 
                         type="checkbox"
@@ -1004,6 +1221,22 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
             </motion.div>
         )}
       </AnimatePresence>
+      
+      <AnimatePresence>
+        {isAnalyzing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 flex flex-col items-center justify-center z-[70] backdrop-blur-sm gap-4"
+          >
+            <Icon name="sparkles" className="w-10 h-10 text-emerald-400 animate-spin" />
+            <p className="text-lg font-display tracking-wider uppercase text-slate-300">
+              AI is analyzing your world...
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isValidationPanelOpen && (
@@ -1015,6 +1248,19 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
             entries={formData.entries || []}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+          {isSuggestionsPanelOpen && (
+              <SuggestionsPanel 
+                  suggestions={suggestions}
+                  onClose={() => setIsSuggestionsPanelOpen(false)}
+                  onSelectEntry={handleSelectEntryFromSuggestion}
+                  onApplyFix={handleApplySuggestion}
+                  worldName={formData.name || 'Unnamed World'}
+                  entries={formData.entries || []}
+              />
+          )}
       </AnimatePresence>
     </>
   );

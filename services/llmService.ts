@@ -412,7 +412,7 @@ export function findRelevantEntries({
 }
 
 
-interface CompletionParams {
+export interface CompletionParams {
   provider: LLMProvider;
   apiKey: string;
   model: string;

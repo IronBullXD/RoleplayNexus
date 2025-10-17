@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Character, Message, ChatSession, GroupChatSession, LLMProvider, GroupTurnAction, ThinkingStep } from '../../types';
+import { Character, Message, ChatSession, GroupChatSession, LLMProvider, GroupTurnAction, ThinkingStep, Settings } from '../../types';
 import { useUIStore } from './uiStore';
 import { useSettingsStore } from './settingsStore';
 import { useWorldStore } from './worldStore';
@@ -71,7 +71,8 @@ export const useChatStore = create<ChatStore>()(
         session: Session | GroupSession,
         currentMessages: Message[],
       ): Promise<{ messages: Message[]; summary: string | undefined }> => {
-        const { settings } = useSettingsStore.getState();
+        const { settings: rawSettings } = useSettingsStore.getState();
+        const settings = rawSettings as Settings;
         const contextSize = session.contextSize ?? settings.contextSize;
         if (!session.memoryEnabled || !contextSize || contextSize <= 0) return { messages: currentMessages, summary: session.memorySummary };
         
@@ -84,12 +85,12 @@ export const useChatStore = create<ChatStore>()(
         const remainingMessages = currentMessages.slice(sliceIndex);
         
         try {
-          const { provider, apiKeys, models } = settings;
-          // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
-          const model = models?.[provider as LLMProvider] || '';
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-          // FIX: Add type assertion for `provider` to satisfy the function signature and prevent type errors.
-          if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider as LLMProvider));
+          const { apiKeys, models } = settings;
+          const provider = settings.provider;
+          const model = models?.[provider] || '';
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          
+          if (!apiKey || !model) throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
           
           const newSummary = await summarizeMessages({ provider, apiKey, model, messages: messagesToSummarize, previousSummary: session.memorySummary });
           const sysMsg: Message = { id: crypto.randomUUID(), role: 'system', content: '[System: Distant memories were summarized to preserve context.]', timestamp: Date.now() };
@@ -120,7 +121,9 @@ export const useChatStore = create<ChatStore>()(
             return;
         }
         
-        const { settings, userPersona } = useSettingsStore.getState();
+        // FIX: Cast settings from persisted state to ensure correct types.
+        const { settings: rawSettings, userPersona } = useSettingsStore.getState();
+        const settings = rawSettings as Settings;
         const useThinking = settings.thinkingEnabled && !isContinuation;
 
         const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', timestamp: Date.now(), isThinking: useThinking, thinkingProcess: [] };
@@ -140,10 +143,9 @@ export const useChatStore = create<ChatStore>()(
             const character = characters.find(c => c.id === activeCharacterId);
             if (!character) throw new Error("Active character not found");
 
-            const { provider, apiKeys, models } = settings;
-            // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
-            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-            const model = models?.[provider as LLMProvider] || '';
+            const { apiKeys, models, provider } = settings;
+            const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+            const model = models?.[provider] || '';
             const world = worlds.find(w => w.id === session.worldId);
             const worldId = world?.id || '';
 
@@ -230,16 +232,17 @@ export const useChatStore = create<ChatStore>()(
           const session = get().groupSessions[sessionId];
           if (!session) throw new Error('Group session not found.');
       
-          const { settings, userPersona } = useSettingsStore.getState();
+          // FIX: Cast settings from persisted state to ensure correct types.
+          const { settings: rawSettings, userPersona } = useSettingsStore.getState();
+          const settings = rawSettings as Settings;
           const { worlds, worldEntryInteractions } = useWorldStore.getState();
           const { characters } = useCharacterStore.getState();
           
           const sessionCharacters = session.characterIds.map(id => characters.find(c => c.id === id)).filter(Boolean) as Character[];
       
-          const { provider, apiKeys, models } = settings;
-          // FIX: Assert the type of 'provider' to LLMProvider, as it can be typed as 'unknown' after rehydration from local storage, causing index errors.
-          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider as LLMProvider];
-          const model = models?.[provider as LLMProvider] || '';
+          const { apiKeys, models, provider } = settings;
+          const apiKey = provider === LLMProvider.GEMINI ? process.env.API_KEY || '' : apiKeys[provider];
+          const model = models?.[provider] || '';
           const world = worlds.find(w => w.id === session.worldId);
           const worldId = world?.id || '';
       
@@ -338,7 +341,8 @@ export const useChatStore = create<ChatStore>()(
             set((state: ChatStore) => ({
                 sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
                 messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
-                characterSessions: { ...state.characterSessions, [characterId]: [...(state.characterSessions[characterId] || []), newSessionData.id] },
+// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
+                characterSessions: { ...state.characterSessions, [characterId]: [...((state.characterSessions as Record<string, string[]>)[characterId] || []), newSessionData.id] },
             }));
             
             return newSessionData.id;
@@ -439,7 +443,8 @@ export const useChatStore = create<ChatStore>()(
             
             set((state: ChatStore) => ({
                 sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
-                characterSessions: { ...state.characterSessions, [activeCharacterId]: [...(state.characterSessions[activeCharacterId] || []), newSessionData.id] },
+// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
+                characterSessions: { ...state.characterSessions, [activeCharacterId]: [...((state.characterSessions as Record<string, string[]>)[activeCharacterId] || []), newSessionData.id] },
             }));
 
             useUIStore.getState().setActiveSessionId(newSessionData.id);
@@ -457,7 +462,8 @@ export const useChatStore = create<ChatStore>()(
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
                 const newCharSessions = { ...state.characterSessions };
-                newCharSessions[characterId] = (newCharSessions[characterId] || []).filter(id => id !== sessionId);
+// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
+                newCharSessions[characterId] = ((newCharSessions as Record<string, string[]>)[characterId] || []).filter(id => id !== sessionId);
 
                 return {
                     sessions: newSessions,
@@ -609,7 +615,8 @@ export const useChatStore = create<ChatStore>()(
         // --- Cross-slice utility actions ---
         deleteChatsForCharacter: (characterId: string) => {
             set((state: ChatStore) => {
-                const sessionsToDelete = new Set(state.characterSessions[characterId] || []);
+// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
+                const sessionsToDelete = new Set((state.characterSessions as Record<string, string[]>)[characterId] || []);
                 const messagesToDelete = new Set<string>();
 
                 sessionsToDelete.forEach(sessionId => {
@@ -637,7 +644,7 @@ export const useChatStore = create<ChatStore>()(
                 messagesToDelete.forEach(id => delete newMessages[id]);
                 
                 const newCharSessions = { ...state.characterSessions };
-                delete newCharSessions[characterId];
+                delete (newCharSessions as Record<string, string[]>)[characterId];
 
                 return {
                     ...state,

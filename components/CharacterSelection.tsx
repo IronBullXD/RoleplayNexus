@@ -144,7 +144,9 @@ const CharacterCard: React.FC<{
   onDelete: (id: string) => void;
   onExport: (character: Character) => void;
   onDuplicate: (id: string) => void;
-}> = React.memo(({ character, onChat, onEdit, onDelete, onExport, onDuplicate }) => {
+  messageCount: number;
+  lastPlayedTimestamp: number;
+}> = React.memo(({ character, onChat, onEdit, onDelete, onExport, onDuplicate, messageCount, lastPlayedTimestamp }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -197,11 +199,35 @@ const CharacterCard: React.FC<{
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
 
-      <div className="relative mt-auto p-4 text-white z-10">
-        <h3 className="font-bold text-lg">{character.name}</h3>
-        <p className="text-sm text-slate-300 line-clamp-2 mt-1">
-          {character.description}
-        </p>
+      <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10 pointer-events-none">
+        {messageCount > 0 && (
+          <span className="text-xs font-semibold bg-crimson-600/80 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-full shadow">
+            {messageCount} msgs
+          </span>
+        )}
+        {lastPlayedTimestamp > 0 && (
+          <span className="text-xs font-semibold bg-slate-700/80 backdrop-blur-sm text-slate-200 px-1.5 py-0.5 rounded-full shadow">
+            {formatRelativeTime(lastPlayedTimestamp)}
+          </span>
+        )}
+      </div>
+
+      <div className="relative mt-auto p-4 text-white z-10 flex flex-col h-full justify-end">
+         <div>
+            <h3 className="font-bold text-lg">{character.name}</h3>
+            <p className="text-sm text-slate-300 line-clamp-2 mt-1 h-[2.5em]">
+              {character.description}
+            </p>
+             {character.tags && character.tags.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mt-2">
+                {character.tags.slice(0, 3).map(tag => (
+                  <span key={tag} className="text-xs font-semibold bg-ember-600/80 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-full shadow">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+        </div>
       </div>
 
       <button
@@ -365,7 +391,8 @@ function CharacterSelection({
   }, []);
 
   const { recentSessions, totalRecentCount } = useMemo(() => {
-    const singleSessions = Object.entries(characterSessions).flatMap(
+    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
+    const singleSessions = Object.entries(characterSessions as Record<string, string[]>).flatMap(
       ([charId, sessionIds]: [string, string[]]) => {
         const char = characters.find((c) => c.id === charId);
         return char
@@ -425,7 +452,8 @@ function CharacterSelection({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
-    Object.entries(characterSessions).forEach(
+    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
+    Object.entries(characterSessions as Record<string, string[]>).forEach(
       ([charId, sessionIds]: [string, string[]]) => {
         let maxTimestamp = 0;
         sessionIds.forEach((sessionId) => {
@@ -443,6 +471,25 @@ function CharacterSelection({
       },
     );
     return timestamps;
+  }, [characterSessions, sessions, allMessages]);
+  
+  const messageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
+    Object.entries(characterSessions as Record<string, string[]>).forEach(([charId, sessionIds]) => {
+        let total = 0;
+        sessionIds.forEach(sessionId => {
+            const session = sessions[sessionId];
+            if (session) {
+                total += (session.messageIds || [])
+                    .map(id => allMessages[id])
+                    .filter(msg => msg && msg.role !== 'system')
+                    .length;
+            }
+        });
+        counts.set(charId, total);
+    });
+    return counts;
   }, [characterSessions, sessions, allMessages]);
 
   const sortedAndFilteredCharacters = useMemo(() => {
@@ -603,6 +650,8 @@ function CharacterSelection({
                 onDelete={deleteCharacter}
                 onExport={handleExportCharacter}
                 onDuplicate={duplicateCharacter}
+                messageCount={messageCounts.get(char.id) || 0}
+                lastPlayedTimestamp={lastPlayedTimestamps.get(char.id) || 0}
               />
             ))}
           </div>
