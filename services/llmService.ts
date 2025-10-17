@@ -7,32 +7,14 @@ import {
   WorldEntry,
   GroupTurnAction,
   Settings,
+  AiAnalysisReport,
+  WorldCoherenceReport,
+  ValidationIssue,
 } from '../types';
 import { API_ENDPOINTS } from '../constants';
 import { logger } from './logger';
 import { ERROR_MESSAGES } from './errorMessages';
-
-// --- Type Guards for Error Handling ---
-/**
- * Represents an error from an API call that includes an HTTP status code.
- */
-export interface ApiError extends Error {
-  status: number;
-}
-
-/**
- * Type guard to check if an error object is an ApiError.
- * @param error The error object to check.
- * @returns True if the error is an ApiError, false otherwise.
- */
-export function isApiError(error: unknown): error is ApiError {
-  return (
-    error instanceof Error &&
-    'status' in error &&
-    typeof (error as any).status === 'number'
-  );
-}
-
+import { handleApiError } from './errorHandler';
 
 // Instantiate the Gemini client once at the module level.
 // Per guidelines, Gemini API key MUST come from the environment.
@@ -340,71 +322,6 @@ const findMatchesInText = (
 };
 
 
-export function findRelevantEntries({
-  messages,
-  world,
-}: {
-  messages: Message[];
-  world: World;
-}): WorldEntry[] {
-  const MAX_SUGGESTIONS = 5;
-  const allEnabledEntries = world.entries.filter((e) => e.enabled);
-  if (allEnabledEntries.length === 0) return [];
-
-  const worldIndex = getOrBuildWorldIndex(world);
-  const { entryIdToEntryMap } = worldIndex;
-
-  const candidateScores = new Map<string, { score: number; reasons: Set<string> }>();
-  const addScore = (entry: WorldEntry, score: number, reason: string) => {
-    if (!candidateScores.has(entry.id))
-      candidateScores.set(entry.id, { score: 0, reasons: new Set() });
-    const current = candidateScores.get(entry.id)!;
-    current.score += score;
-    current.reasons.add(reason);
-  };
-  
-  const searchContext = (text: string, baseScore: number, type: string) => {
-    const matches = findMatchesInText(text, worldIndex);
-    for (const matchData of matches.values()) {
-      const frequencyBonus = Math.pow(matchData.count, 1.2);
-      const finalScore = baseScore * frequencyBonus;
-      const reasonSummary = Array.from(matchData.reasons).slice(0, 2).join(', ');
-      addScore(
-        matchData.entry,
-        finalScore,
-        `${type}: ${reasonSummary} (x${matchData.count})`,
-      );
-    }
-  };
-
-  messages.forEach((message, i) => {
-    const recency = messages.length - 1 - i;
-    const recencyScore = Math.max(2, 12 - recency * 2);
-    searchContext(message.content, recencyScore, `Message (t-${recency})`);
-  });
-
-  if (candidateScores.size === 0) return [];
-
-  const lastMessageContent = messages[messages.length - 1]?.content.toLowerCase() || '';
-
-  const rankedCandidates = Array.from(candidateScores.entries())
-    .map(([id, data]) => ({
-      entry: entryIdToEntryMap.get(id)!,
-      ...data,
-    }))
-    .filter(({ entry }) => !entry.isAlwaysActive)
-    .filter(({ entry }) => {
-        // Don't suggest entries that were literally just named
-        const name = entry.name?.toLowerCase();
-        return name ? !lastMessageContent.includes(name) : true;
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_SUGGESTIONS);
-
-  return rankedCandidates.map((c) => c.entry);
-}
-
-
 export interface CompletionParams {
   provider: LLMProvider;
   apiKey: string;
@@ -449,12 +366,7 @@ interface SummarizeParams {
   previousSummary?: string;
 }
 
-export interface InconsistencyReport {
-  explanation: string;
-  conflictingEntryIds: string[];
-}
-
-interface ConsistencyCheckParams {
+interface AiAnalysisParams {
   provider: LLMProvider;
   apiKey: string;
   model: string;
@@ -462,107 +374,123 @@ interface ConsistencyCheckParams {
 }
 
 
-export async function checkForInconsistencies({
+export async function runAiWorldAnalysis({
   provider,
   apiKey,
   model,
   world,
-}: ConsistencyCheckParams): Promise<InconsistencyReport[]> {
-    const systemPrompt = `You are a meticulous continuity editor for a fictional world. Your task is to analyze a set of lore entries and identify any direct contradictions or significant logical inconsistencies.
+}: AiAnalysisParams): Promise<AiAnalysisReport> {
+  try {
+    const systemPrompt = `You are a meticulous continuity editor, narrative designer, and quality assessor for a fictional world. Your task is to perform a comprehensive analysis of the provided lore entries.
 
-CRITICAL INSTRUCTIONS:
-1.  Read all the provided lore entries carefully. Each entry has a unique ID.
-2.  Identify pairs or groups of entries that contain conflicting information. Focus on direct contradictions (e.g., "The king is alive" vs. "The king is dead"; "Magic is impossible" vs. "She is a wizard").
-3.  For each contradiction you find, you MUST provide a concise explanation of the conflict and the exact IDs of the entries involved.
-4.  If there are no contradictions, return an empty array.
-5.  Your response MUST be a valid JSON array matching the provided schema. Do not include any text outside of the JSON structure.`;
-    
+You will return a single JSON object containing two main parts: "issues" and "coherence".
+
+1.  **ISSUES**: An array of problems you find. Identify two types:
+    *   **Contradiction**: Direct contradictions, logical impossibilities, or significant plot holes between entries.
+    *   **InconsistentVoice**: For entries in the 'Character' category, check if their content maintains a consistent personality and speaking style. Also, flag major stylistic/tonal shifts between general lore entries that feel out of place.
+    *   For each issue, you MUST provide a concise explanation and the exact IDs of the entries involved. If there are no issues, return an empty array for this field.
+
+2.  **COHERENCE**: An overall assessment of the world's quality. This object must contain:
+    *   **score**: A coherence score from 0 to 100, where 100 is perfectly coherent and well-developed.
+    *   **summary**: A brief, one-sentence summary of your assessment.
+    *   **positivePoints**: A string array listing 2-3 specific strengths of the world.
+    *   **improvementAreas**: A string array listing 2-3 key areas for improvement.
+
+CRITICAL: Your entire response MUST be a single, valid JSON object matching the provided schema. Do not include any text outside of the JSON structure.`;
+
     const worldContent = world.entries
-      .filter(e => e.enabled && e.content)
-      .map(entry => `--- Entry ID: ${entry.id}, Name: ${entry.name || 'Unnamed'} ---\n${entry.content}`)
+      .filter((e) => e.enabled && e.content)
+      .map(
+        (entry) =>
+          `--- Entry ID: ${entry.id}, Name: ${
+            entry.name || 'Unnamed'
+          }, Category: ${entry.category || 'N/A'} ---\n${entry.content}`,
+      )
       .join('\n\n');
-      
+
     if (!worldContent) {
-        return []; // No content to check
+      return { issues: [], coherence: { score: 0, summary: "No content to analyze.", positivePoints: [], improvementAreas: ["Add content to entries."] } };
     }
 
-    const userPrompt = `Here are the lore entries for the world of "${world.name}". Please analyze them for contradictions.\n\n${worldContent}`;
+    const userPrompt = `Here are the lore entries for the world of "${world.name}". Please perform a full analysis based on your instructions.\n\n${worldContent}`;
 
-    const requestData = { provider, model, worldName: world.name };
-    logger.apiRequest('Checking for world inconsistencies', requestData);
+    logger.apiRequest('Running full AI world analysis', { provider, model, worldName: world.name });
 
-    try {
-        if (provider === LLMProvider.GEMINI) {
-            const response = await geminiAI.models.generateContent({
-                model: model,
-                contents: userPrompt,
-                config: {
-                    systemInstruction: systemPrompt,
-                    temperature: 0.2, // Lower temperature for more analytical task
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                explanation: {
-                                    type: Type.STRING,
-                                    description: "A clear and concise explanation of the contradiction."
-                                },
-                                conflictingEntryIds: {
-                                    type: Type.ARRAY,
-                                    description: "An array of the string IDs of the entries that conflict with each other.",
-                                    items: { type: Type.STRING }
-                                }
-                            },
-                            required: ["explanation", "conflictingEntryIds"],
-                        }
-                    },
-                }
-            });
+    if (provider === LLMProvider.GEMINI) {
+      const response = await geminiAI.models.generateContent({
+        model: model,
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              issues: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    type: { type: Type.STRING, enum: ['Contradiction', 'InconsistentVoice'] },
+                    message: { type: Type.STRING, description: 'A clear explanation of the issue.' },
+                    entryIds: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ['type', 'message', 'entryIds'],
+                },
+              },
+              coherence: {
+                type: Type.OBJECT,
+                properties: {
+                  score: { type: Type.NUMBER },
+                  summary: { type: Type.STRING },
+                  positivePoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  improvementAreas: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['score', 'summary', 'positivePoints', 'improvementAreas'],
+              },
+            },
+            required: ['issues', 'coherence'],
+          },
+        },
+      });
 
-            const jsonStr = response.text.trim();
-            const report = JSON.parse(jsonStr) as InconsistencyReport[];
-            logger.apiResponse('Inconsistency check successful', { response: report });
-            return report;
-        } else {
-             const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
-            if (!endpoint) throw new Error(`API endpoint for ${provider} is not configured.`);
-            
-            const openAIPrompt = `${systemPrompt}\n\n${userPrompt}`;
-            const body = {
-                model,
-                messages: [
-                    { role: "system", content: "You are a helpful assistant that only responds in JSON." },
-                    { role: "user", content: openAIPrompt }
-                ],
-                temperature: 0.2,
-                response_format: { type: "json_object" },
-            };
-            
-            const response = await fetchWithRetry(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-                body: JSON.stringify(body)
-            });
+      const jsonStr = response.text.trim();
+      const report = JSON.parse(jsonStr) as AiAnalysisReport;
+      logger.apiResponse('AI world analysis successful', { response: report });
+      return report;
+    } else {
+        // Fallback for non-Gemini providers with less reliable JSON formatting
+        const openAIPrompt = `${systemPrompt}\n\n${userPrompt}`;
+        const body = {
+            model,
+            messages: [
+                { role: "system", content: "You are a helpful assistant that only responds in JSON." },
+                { role: "user", content: openAIPrompt }
+            ],
+            temperature: 0.2,
+            response_format: { type: "json_object" },
+        };
+        const response = await fetchWithRetry(API_ENDPOINTS[provider], {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(body)
+        });
 
-            if (!response.ok) throw new Error(`API request failed with status ${response.status}: ${await response.text()}`);
-
-            const data = await response.json();
-            const content = data.choices[0]?.message?.content;
-            if (!content) throw new Error('Invalid response format from API.');
-
-            // Attempt to parse what might be inside the content
-            const parsed = JSON.parse(content);
-            const report = (parsed.contradictions || parsed) as InconsistencyReport[];
-
-            logger.apiResponse('Inconsistency check successful', { response: report });
-            return Array.isArray(report) ? report : [];
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(errorBody);
         }
-    } catch (error) {
-        logger.error('World inconsistency check failed', { error, requestData });
-        throw error;
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content;
+        if (!content) throw new Error('Invalid response format from API.');
+        const report = JSON.parse(content) as AiAnalysisReport;
+        logger.apiResponse('AI world analysis successful', { response: report });
+        return report;
     }
+  } catch (error) {
+    throw handleApiError(error, provider);
+  }
 }
 
 
@@ -573,7 +501,8 @@ export async function summarizeMessages({
   messages,
   previousSummary,
 }: SummarizeParams): Promise<string> {
-  const systemPrompt = `You are an expert at creating and updating conversation summaries. Your task is to produce a new, consolidated summary.
+  try {
+    const systemPrompt = `You are an expert at creating and updating conversation summaries. Your task is to produce a new, consolidated summary.
 
 Instructions:
 1.  Read the "PREVIOUS SUMMARY" (if provided). This is the condensed history of events so far.
@@ -583,26 +512,24 @@ Instructions:
 5.  It MUST capture all key events, character developments, important decisions, new lore, and crucial facts.
 6.  CRITICAL: Do NOT repeat information. If the new log clarifies or supersedes something from the previous summary, update it. Keep the summary as concise as possible while retaining vital information.`;
 
-  const conversationText = messages
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-    .join('\n');
+    const conversationText = messages
+      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n');
 
-  const userPromptParts = [];
-  if (previousSummary) {
-    userPromptParts.push('### PREVIOUS SUMMARY ###');
-    userPromptParts.push(previousSummary);
-  }
-  userPromptParts.push('### NEW CONVERSATION LOG ###');
-  userPromptParts.push(conversationText);
-  userPromptParts.push(
-    '\nBased on the instructions, provide the new, consolidated summary.',
-  );
-  const userPrompt = userPromptParts.join('\n\n');
+    const userPromptParts = [];
+    if (previousSummary) {
+      userPromptParts.push('### PREVIOUS SUMMARY ###');
+      userPromptParts.push(previousSummary);
+    }
+    userPromptParts.push('### NEW CONVERSATION LOG ###');
+    userPromptParts.push(conversationText);
+    userPromptParts.push(
+      '\nBased on the instructions, provide the new, consolidated summary.',
+    );
+    const userPrompt = userPromptParts.join('\n\n');
 
-  const requestData = { provider, model };
-  logger.apiRequest('Summarizing conversation', requestData);
+    logger.apiRequest('Summarizing conversation', { provider, model });
 
-  try {
     if (provider === LLMProvider.GEMINI) {
       const response = await geminiAI.models.generateContent({
         model,
@@ -635,10 +562,12 @@ Instructions:
         body: JSON.stringify(body),
       });
 
-      if (!response.ok)
-        throw new Error(
-          `API request failed with status ${response.status}: ${await response.text()}`,
-        );
+      if (!response.ok) {
+        const errorBody = await response.text();
+        const error = new Error(errorBody);
+        (error as any).status = response.status;
+        throw error;
+      }
 
       const data = await response.json();
       const summary = data.choices[0]?.message?.content?.trim();
@@ -648,8 +577,7 @@ Instructions:
       return summary;
     }
   } catch (error) {
-    logger.error('Summarization failed', { error, requestData });
-    throw error;
+    throw handleApiError(error, provider);
   }
 }
 
@@ -659,7 +587,8 @@ export async function generateCharacterProfile({
   model,
   concept,
 }: GenerateCharacterParams): Promise<GeneratedCharacterProfile> {
-  const systemPrompt = `
+  try {
+    const systemPrompt = `
 You are a creative assistant that designs compelling characters for a roleplaying game. Based on the user's concept, generate a complete character profile. The profile must include a unique name, a short greeting message, a brief description for a character list, and a detailed persona for the AI to use.
 
 CRITICAL INSTRUCTIONS FOR THE 'greeting' FIELD:
@@ -688,14 +617,12 @@ Motivations:
 [What drives your character.]
 
 Respond ONLY with a valid JSON object matching the provided schema.
-  `.trim();
+    `.trim();
 
-  const userPrompt = `Concept: "${concept}"`;
+    const userPrompt = `Concept: "${concept}"`;
 
-  const requestData = { provider, model, concept };
-  logger.apiRequest('Generating character profile', requestData);
+    logger.apiRequest('Generating character profile', { provider, model, concept });
 
-  try {
     if (provider === LLMProvider.GEMINI) {
       const response = await geminiAI.models.generateContent({
         model: model,
@@ -762,17 +689,14 @@ Respond ONLY with a valid JSON object matching the provided schema.
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `API request failed with status ${response.status}: ${errorBody}`,
-        );
+        const error = new Error(errorBody);
+        (error as any).status = response.status;
+        throw error;
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
       if (!content) {
-        logger.error('Invalid API response format (missing content)', {
-          responseData: data,
-        });
         throw new Error('Invalid response format from API.');
       }
       const profile = JSON.parse(content) as GeneratedCharacterProfile;
@@ -782,8 +706,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
       return profile;
     }
   } catch (error) {
-    logger.error('Character generation failed', { error, requestData });
-    throw error; // Re-throw the original error after logging
+    throw handleApiError(error, provider);
   }
 }
 
@@ -940,13 +863,8 @@ async function* getOpenAICompatibleCompletionStream(
     if (signal?.aborted) {
       throw new DOMException('The user aborted a request.', 'AbortError');
     }
-    let errorBodyText = `(Could not read error body)`;
-    try {
-      errorBodyText = await response.text();
-    } catch (e) {
-      logger.error('Failed to read error response body', { originalError: e });
-    }
-
+    const errorBodyText = await response.text().catch(() => `(Could not read error body for status ${response.status})`);
+    
     logger.error(`OpenAI-compatible API request failed: ${response.status}`, {
       provider,
       status: response.status,
@@ -954,20 +872,12 @@ async function* getOpenAICompatibleCompletionStream(
       requestBody: body,
     });
     
-    let errorMessage = `API request failed with status ${response.status}: ${errorBodyText}`;
-    if (response.status === 401) {
-        errorMessage = ERROR_MESSAGES.API_KEY_INVALID(provider);
-    } else if (response.status === 429) {
-        errorMessage = ERROR_MESSAGES.RATE_LIMIT(provider);
-    }
-
-    const error = new Error(errorMessage);
+    const error = new Error(errorBodyText);
     (error as any).status = response.status;
     throw error;
   }
 
   if (!response.body) {
-    logger.error('OpenAI-compatible API response body is empty', { provider });
     throw new Error('The response body is empty.');
   }
 
@@ -996,234 +906,206 @@ export async function* getChatCompletionStream(
     activeCharacterNames,
     interactionData,
   } = params;
+  
+  try {
+    if (!model?.trim()) {
+      throw new Error(
+        `Model name for ${provider} is not configured. Please set it in API Settings.`,
+      );
+    }
 
-  if (!model?.trim()) {
-    throw new Error(
-      `Model name for ${provider} is not configured. Please set it in API Settings.`,
-    );
-  }
+    const promptParts: string[] = [];
 
-  const promptParts: string[] = [];
+    promptParts.push('### CORE INSTRUCTIONS & GUIDELINES ###');
+    promptParts.push(globalSystemPrompt);
 
-  promptParts.push('### CORE INSTRUCTIONS & GUIDELINES ###');
-  promptParts.push(globalSystemPrompt);
+    if (userPersona) {
+      promptParts.push('### USER PERSONA ###');
+      promptParts.push(
+        'This is the persona of the user you are roleplaying with. Keep their details in mind for your responses.',
+      );
+      promptParts.push(`- **Name:** ${userPersona.name}`);
+      promptParts.push(`- **Description:** ${userPersona.description}`);
+    }
 
-  if (userPersona) {
-    promptParts.push('### USER PERSONA ###');
-    promptParts.push(
-      'This is the persona of the user you are roleplaying with. Keep their details in mind for your responses.',
-    );
-    promptParts.push(`- **Name:** ${userPersona.name}`);
-    promptParts.push(`- **Description:** ${userPersona.description}`);
-  }
+    if (memorySummary) {
+      promptParts.push('### CONVERSATION SUMMARY ###');
+      promptParts.push(
+        'This is a summary of the conversation so far. Use it to maintain context and continuity.',
+      );
+      promptParts.push(`---\n${memorySummary}\n---`);
+    }
 
-  if (memorySummary) {
-    promptParts.push('### CONVERSATION SUMMARY ###');
-    promptParts.push(
-      'This is a summary of the conversation so far. Use it to maintain context and continuity.',
-    );
-    promptParts.push(`---\n${memorySummary}\n---`);
-  }
+    // --- Smart World Lore Retrieval (RAG v5) ---
+    const MAX_LORE_ENTRIES = 7;
 
-  // --- Smart World Lore Retrieval (RAG v5) ---
-  const MAX_LORE_ENTRIES = 7;
+    if (world?.entries && world.entries.length > 0) {
+      const allEnabledEntries = world.entries.filter((e) => e.enabled);
+      if (allEnabledEntries.length > 0) {
+        const worldIndex = getOrBuildWorldIndex(world);
+        const { entryIdToEntryMap } = worldIndex;
 
-  if (world?.entries && world.entries.length > 0) {
-    const allEnabledEntries = world.entries.filter((e) => e.enabled);
-    if (allEnabledEntries.length > 0) {
-      // 1. Build advanced keyword index by retrieving from cache or computing.
-      const worldIndex = getOrBuildWorldIndex(world);
-      const { entryIdToEntryMap } = worldIndex;
+        const candidateScores = new Map<
+          string,
+          { score: number; reasons: Set<string> }
+        >();
+        const addScore = (entry: WorldEntry, score: number, reason: string) => {
+          if (!candidateScores.has(entry.id))
+            candidateScores.set(entry.id, { score: 0, reasons: new Set() });
+          const current = candidateScores.get(entry.id)!;
+          current.score += score;
+          current.reasons.add(reason);
+        };
 
-      const candidateScores = new Map<
-        string,
-        { score: number; reasons: Set<string> }
-      >();
-      const addScore = (entry: WorldEntry, score: number, reason: string) => {
-        if (!candidateScores.has(entry.id))
-          candidateScores.set(entry.id, { score: 0, reasons: new Set() });
-        const current = candidateScores.get(entry.id)!;
-        current.score += score;
-        current.reasons.add(reason);
-      };
-
-      // 2. Base scores: Always-active and user feedback
-      for (const entry of allEnabledEntries) {
-        if (entry.isAlwaysActive) addScore(entry, 100, 'Always Active');
-        if (interactionData && interactionData[entry.id]) {
-          const interactionScore = Math.round(
-            Math.log1p(interactionData[entry.id].viewCount) * 15,
-          );
-          if (interactionScore > 0)
-            addScore(
-              entry,
-              interactionScore,
-              `User Interaction (${interactionData[entry.id].viewCount} views)`,
+        for (const entry of allEnabledEntries) {
+          if (entry.isAlwaysActive) addScore(entry, 100, 'Always Active');
+          if (interactionData && interactionData[entry.id]) {
+            const interactionScore = Math.round(
+              Math.log1p(interactionData[entry.id].viewCount) * 15,
             );
+            if (interactionScore > 0)
+              addScore(
+                entry,
+                interactionScore,
+                `User Interaction (${interactionData[entry.id].viewCount} views)`,
+              );
+          }
         }
-      }
 
-      // 3. Character relationship scores
-      const allActiveChars = [
-        characterName,
-        ...(activeCharacterNames || []),
-      ].filter(Boolean) as string[];
-      if (allActiveChars.length > 0) {
-        for (const charName of allActiveChars) {
-          const lowerCharName = charName.toLowerCase();
-          if (worldIndex.plainKeywordMap.has(lowerCharName)) {
-            worldIndex.plainKeywordMap
-              .get(lowerCharName)!
-              .forEach((entry: WorldEntry) => {
-                addScore(
-                  entry,
-                  50,
-                  `Linked to active character: "${charName}"`,
-                );
-              });
+        const allActiveChars = [
+          characterName,
+          ...(activeCharacterNames || []),
+        ].filter(Boolean) as string[];
+        if (allActiveChars.length > 0) {
+          for (const charName of allActiveChars) {
+            const lowerCharName = charName.toLowerCase();
+            if (worldIndex.plainKeywordMap.has(lowerCharName)) {
+              worldIndex.plainKeywordMap
+                .get(lowerCharName)!
+                .forEach((entry: WorldEntry) => {
+                  addScore(
+                    entry,
+                    50,
+                    `Linked to active character: "${charName}"`,
+                  );
+                });
+            }
+          }
+        }
+
+        const searchContext = (text: string, baseScore: number, type: string) => {
+          const matches = findMatchesInText(text, worldIndex);
+          for (const matchData of matches.values()) {
+            const frequencyBonus = Math.pow(matchData.count, 1.2);
+            const finalScore = baseScore * frequencyBonus;
+            const reasonSummary = Array.from(matchData.reasons)
+              .slice(0, 2)
+              .join(', ');
+            addScore(
+              matchData.entry,
+              finalScore,
+              `${type}: ${reasonSummary} (x${matchData.count})`,
+            );
+          }
+        };
+
+        const recentMessages = messages.slice(-5);
+        recentMessages.forEach((message, i) => {
+          const recency = recentMessages.length - 1 - i;
+          const recencyScore = Math.max(2, 12 - recency * 2);
+          searchContext(message.content, recencyScore, `Message (t-${recency})`);
+        });
+
+        searchContext(userPersona?.description, 5, 'User Persona');
+        searchContext(characterPersona, 3, 'Character Persona');
+
+        if (candidateScores.size > 0) {
+          const rankedCandidates = Array.from(candidateScores.entries())
+            .map(([id, data]) => ({
+              entry: entryIdToEntryMap.get(id)!,
+              ...data,
+            }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, MAX_LORE_ENTRIES);
+
+          if (rankedCandidates.length > 0) {
+            const finalEntries = rankedCandidates.map((c) => c.entry);
+            promptParts.push('### RELEVANT WORLD LORE ###');
+            promptParts.push(
+              'The following lore entries are relevant to the current scene. You MUST consult them for context and consistency.',
+            );
+            const lorebookContent = finalEntries
+              .map(
+                (entry) =>
+                  `--- Entry: ${entry.name || 'Untitled'} (Keywords: ${(
+                    entry.keys || []
+                  ).join(', ')}) ---\n${entry.content}`,
+              )
+              .join('\n\n');
+            promptParts.push(lorebookContent);
+
+            logger.log('Injected ranked lore entries', {
+              count: finalEntries.length,
+              world: world?.name,
+              entries: rankedCandidates.map((c) => ({
+                name: c.entry.name,
+                score: Math.round(c.score),
+                reasons: Array.from(c.reasons),
+              })),
+            });
           }
         }
       }
+    }
 
-      // 4. Contextual search with smart matching
-      const searchContext = (text: string, baseScore: number, type: string) => {
-        const matches = findMatchesInText(text, worldIndex);
-        for (const matchData of matches.values()) {
-          const frequencyBonus = Math.pow(matchData.count, 1.2);
-          const finalScore = baseScore * frequencyBonus;
-          const reasonSummary = Array.from(matchData.reasons)
-            .slice(0, 2)
-            .join(', ');
-          addScore(
-            matchData.entry,
-            finalScore,
-            `${type}: ${reasonSummary} (x${matchData.count})`,
-          );
-        }
-      };
+    promptParts.push('### YOUR CHARACTER ###');
+    promptParts.push(
+      `This is your character's persona for this scene. You must fully embody this character.`,
+    );
+    promptParts.push(characterPersona);
 
-      const recentMessages = messages.slice(-5);
-      recentMessages.forEach((message, i) => {
-        const recency = recentMessages.length - 1 - i;
-        const recencyScore = Math.max(2, 12 - recency * 2);
-        searchContext(message.content, recencyScore, `Message (t-${recency})`);
-      });
+    const finalSystemPrompt = promptParts.join('\n\n');
 
-      searchContext(userPersona?.description, 5, 'User Persona');
-      searchContext(characterPersona, 3, 'Character Persona');
+    const availableTokensForHistory = contextSize;
+    const truncatedMessages: Message[] = [];
+    let usedTokens = 0;
 
-      // 5. Rank and select top entries
-      if (candidateScores.size > 0) {
-        const rankedCandidates = Array.from(candidateScores.entries())
-          .map(([id, data]) => ({
-            entry: entryIdToEntryMap.get(id)!,
-            ...data,
-          }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, MAX_LORE_ENTRIES);
-
-        if (rankedCandidates.length > 0) {
-          const finalEntries = rankedCandidates.map((c) => c.entry);
-          promptParts.push('### RELEVANT WORLD LORE ###');
-          promptParts.push(
-            'The following lore entries are relevant to the current scene. You MUST consult them for context and consistency.',
-          );
-          const lorebookContent = finalEntries
-            .map(
-              (entry) =>
-                `--- Entry: ${entry.name || 'Untitled'} (Keywords: ${(
-                  entry.keys || []
-                ).join(', ')}) ---\n${entry.content}`,
-            )
-            .join('\n\n');
-          promptParts.push(lorebookContent);
-
-          logger.log('Injected ranked lore entries', {
-            count: finalEntries.length,
-            world: world?.name,
-            entries: rankedCandidates.map((c) => ({
-              name: c.entry.name,
-              score: Math.round(c.score),
-              reasons: Array.from(c.reasons),
-            })),
-          });
-        }
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const messageTokens = estimateTokens(message.content);
+      if (usedTokens + messageTokens > availableTokensForHistory) {
+        logger.log(`Context limit reached. Truncating messages.`, {
+          availableTokens: availableTokensForHistory,
+          usedTokens,
+          totalMessages: messages.length,
+          messagesKept: truncatedMessages.length,
+        });
+        break;
       }
+      truncatedMessages.unshift(message);
+      usedTokens += messageTokens;
     }
-  }
 
-  promptParts.push('### YOUR CHARACTER ###');
-  promptParts.push(
-    `This is your character's persona for this scene. You must fully embody this character.`,
-  );
-  promptParts.push(characterPersona);
+    const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
+    const systemMessage: Message = { id: 'system-prompt-message', role: 'system', content: finalSystemPrompt };
+    const apiMessages = [systemMessage, ...mergedHistory.filter((m) => m.role !== 'system')];
 
-  const finalSystemPrompt = promptParts.join('\n\n');
-
-  // Token Management - Truncate messages to fit context window
-  const availableTokensForHistory = contextSize;
-
-  const truncatedMessages: Message[] = [];
-  let usedTokens = 0;
-
-  // Iterate backwards through messages to keep the most recent ones
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    const messageTokens = estimateTokens(message.content);
-    if (usedTokens + messageTokens > availableTokensForHistory) {
-      logger.log(`Context limit reached. Truncating messages.`, {
-        availableTokens: availableTokensForHistory,
-        usedTokens,
-        totalMessages: messages.length,
-        messagesKept: truncatedMessages.length,
-      });
-      break;
+    if (provider === LLMProvider.GEMINI) {
+      yield* getGeminiCompletionStream(
+        apiMessages, model, temperature, maxOutputTokens, prefill, signal
+      );
+    } else if (
+      provider === LLMProvider.OPENROUTER ||
+      provider === LLMProvider.DEEPSEEK
+    ) {
+      yield* getOpenAICompatibleCompletionStream(
+        provider, apiKey, apiMessages, model, temperature, maxOutputTokens, prefill, signal
+      );
+    } else {
+      throw new Error(`Unsupported provider: ${provider}`);
     }
-    truncatedMessages.unshift(message); // Add to the beginning of the array
-    usedTokens += messageTokens;
-  }
-
-  // Merge consecutive messages to prevent API errors from non-alternating roles
-  const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
-
-  const systemMessage: Message = {
-    id: 'system-prompt-message',
-    role: 'system',
-    content: finalSystemPrompt,
-  };
-
-  const apiMessages = [
-    systemMessage,
-    ...mergedHistory.filter((m) => m.role !== 'system'),
-  ];
-
-  // Now call the appropriate stream generator based on provider.
-  if (provider === LLMProvider.GEMINI) {
-    yield* getGeminiCompletionStream(
-      apiMessages,
-      model,
-      temperature,
-      maxOutputTokens,
-      prefill,
-      signal,
-    );
-  } else if (
-    provider === LLMProvider.OPENROUTER ||
-    provider === LLMProvider.DEEPSEEK
-  ) {
-    yield* getOpenAICompatibleCompletionStream(
-      provider,
-      apiKey,
-      apiMessages,
-      model,
-      temperature,
-      maxOutputTokens,
-      prefill,
-      signal,
-    );
-  } else {
-    logger.error(`Unsupported provider in getChatCompletionStream: ${provider}`);
-    throw new Error(`Unsupported provider: ${provider}`);
+  } catch (error) {
+    throw handleApiError(error, provider);
   }
 }
 
@@ -1253,124 +1135,121 @@ export async function getGroupChatCompletion(
     memorySummary,
     sessionCharacters,
     scenario,
-    interactionData,
   } = params;
-
-  if (!model?.trim()) {
-    throw new Error(
-      `Model name for ${provider} is not configured. Please set it in API Settings.`,
-    );
-  }
-
-  const promptParts: string[] = [];
-
-  promptParts.push('### CORE INSTRUCTIONS: GROUP SCENE DIRECTOR ###');
-  promptParts.push(
-    `You are a master storyteller and scene director for a multi-character roleplay. Your task is to advance the scene based on the latest user message and the established context. You must direct the characters, deciding who speaks or acts. You can have one or multiple characters act in a single turn. You can also include narrative descriptions.`,
-  );
-
-  promptParts.push('### SCENE DETAILS ###');
-  promptParts.push(`**Scenario:** ${scenario}`);
-  promptParts.push(
-    `**Characters in Scene:**\n${sessionCharacters
-      .map((c) => `- ${c.name}`)
-      .join('\n')}`,
-  );
-
-  promptParts.push('### ROLEPLAY GUIDELINES ###');
-  promptParts.push(globalSystemPrompt);
-
-  if (userPersona) {
-    promptParts.push('### USER PERSONA ###');
-    promptParts.push('This is the persona of the user you are roleplaying with.');
-    promptParts.push(`- **Name:** ${userPersona.name}`);
-    promptParts.push(`- **Description:** ${userPersona.description}`);
-  }
-
-  if (memorySummary) {
-    promptParts.push('### CONVERSATION SUMMARY ###');
-    promptParts.push('This is a summary of the conversation so far.');
-    promptParts.push(`---\n${memorySummary}\n---`);
-  }
-
-  // Simplified RAG for group chat (could be expanded)
-  if (world?.entries) {
-    const activeEntries = world.entries.filter(
-      (e) => e.enabled && e.isAlwaysActive,
-    );
-    if (activeEntries.length > 0) {
-      promptParts.push('### RELEVANT WORLD LORE ###');
-      promptParts.push(
-        'The following lore entries are relevant. You MUST consult them for context and consistency.',
-      );
-      promptParts.push(
-        activeEntries.map((e) => e.content).join('\n---\n'),
+  
+  try {
+    if (!model?.trim()) {
+      throw new Error(
+        `Model name for ${provider} is not configured. Please set it in API Settings.`,
       );
     }
-  }
 
-  promptParts.push('### FULL CHARACTER PERSONAS ###');
-  promptParts.push(
-    'This is a reference for all characters in the scene. Use it to ensure their actions and dialogue are in-character.',
-  );
-  promptParts.push(
-    sessionCharacters
-      .map((c) => `--- ${c.name} ---\n${c.persona}\n---`)
-      .join('\n\n'),
-  );
+    const promptParts: string[] = [];
 
-  const finalSystemPrompt = promptParts.join('\n\n');
+    promptParts.push('### CORE INSTRUCTIONS: GROUP SCENE DIRECTOR ###');
+    promptParts.push(
+      `You are a master storyteller and scene director for a multi-character roleplay. Your task is to advance the scene based on the latest user message and the established context. You must direct the characters, deciding who speaks or acts. You can have one or multiple characters act in a single turn. You can also include narrative descriptions.`,
+    );
 
-  // Token Management
-  const availableTokensForHistory = contextSize;
-  const truncatedMessages: Message[] = [];
-  let usedTokens = 0;
-  for (let i = allMessages.length - 1; i >= 0; i--) {
-    const message = allMessages[i];
-    const messageTokens = estimateTokens(message.content);
-    if (usedTokens + messageTokens > availableTokensForHistory) break;
-    truncatedMessages.unshift(message);
-    usedTokens += messageTokens;
-  }
-  const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
+    promptParts.push('### SCENE DETAILS ###');
+    promptParts.push(`**Scenario:** ${scenario}`);
+    promptParts.push(
+      `**Characters in Scene:**\n${sessionCharacters
+        .map((c) => `- ${c.name}`)
+        .join('\n')}`,
+    );
 
-  if (provider === LLMProvider.GEMINI) {
-    const geminiPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nBased on the conversation history, generate the next turn in the scene as an array of actions.
+    promptParts.push('### ROLEPLAY GUIDELINES ###');
+    promptParts.push(globalSystemPrompt);
+
+    if (userPersona) {
+      promptParts.push('### USER PERSONA ###');
+      promptParts.push('This is the persona of the user you are roleplaying with.');
+      promptParts.push(`- **Name:** ${userPersona.name}`);
+      promptParts.push(`- **Description:** ${userPersona.description}`);
+    }
+
+    if (memorySummary) {
+      promptParts.push('### CONVERSATION SUMMARY ###');
+      promptParts.push('This is a summary of the conversation so far.');
+      promptParts.push(`---\n${memorySummary}\n---`);
+    }
+
+    if (world?.entries) {
+      const activeEntries = world.entries.filter(
+        (e) => e.enabled && e.isAlwaysActive,
+      );
+      if (activeEntries.length > 0) {
+        promptParts.push('### RELEVANT WORLD LORE ###');
+        promptParts.push(
+          'The following lore entries are relevant. You MUST consult them for context and consistency.',
+        );
+        promptParts.push(
+          activeEntries.map((e) => e.content).join('\n---\n'),
+        );
+      }
+    }
+
+    promptParts.push('### FULL CHARACTER PERSONAS ###');
+    promptParts.push(
+      'This is a reference for all characters in the scene. Use it to ensure their actions and dialogue are in-character.',
+    );
+    promptParts.push(
+      sessionCharacters
+        .map((c) => `--- ${c.name} ---\n${c.persona}\n---`)
+        .join('\n\n'),
+    );
+
+    const finalSystemPrompt = promptParts.join('\n\n');
+
+    const availableTokensForHistory = contextSize;
+    const truncatedMessages: Message[] = [];
+    let usedTokens = 0;
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const message = allMessages[i];
+      const messageTokens = estimateTokens(message.content);
+      if (usedTokens + messageTokens > availableTokensForHistory) break;
+      truncatedMessages.unshift(message);
+      usedTokens += messageTokens;
+    }
+    const mergedHistory = mergeConsecutiveRoleMessages(truncatedMessages);
+
+    if (provider === LLMProvider.GEMINI) {
+      const geminiPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nBased on the conversation history, generate the next turn in the scene as an array of actions.
 - For a character's turn, use their exact name for "characterName".
 - For narrative descriptions of the scene, use the special name "Narrator" for "characterName".
 - "content" should be a string containing the dialogue and/or actions, following standard roleplay format (e.g., *He looks around.* "What was that?").`;
 
-    const response = await geminiAI.models.generateContent({
-      model,
-      contents: [
-        ...mergedHistory.map((msg) => ({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }],
-        })),
-      ],
-      config: {
-        systemInstruction: geminiPrompt,
-        temperature,
-        maxOutputTokens,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              characterName: { type: Type.STRING },
-              content: { type: Type.STRING },
+      const response = await geminiAI.models.generateContent({
+        model,
+        contents: [
+          ...mergedHistory.map((msg) => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }],
+          })),
+        ],
+        config: {
+          systemInstruction: geminiPrompt,
+          temperature,
+          maxOutputTokens,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                characterName: { type: Type.STRING },
+                content: { type: Type.STRING },
+              },
+              required: ['characterName', 'content'],
             },
-            required: ['characterName', 'content'],
           },
         },
-      },
-    });
-    const jsonStr = response.text.trim();
-    return JSON.parse(jsonStr) as GroupTurnAction[];
-  } else {
-    // OpenAI-compatible
-    const openAIPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nYOUR RESPONSE MUST BE A VALID JSON OBJECT with a single key "turn".
+      });
+      const jsonStr = response.text.trim();
+      return JSON.parse(jsonStr) as GroupTurnAction[];
+    } else {
+      const openAIPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nYOUR RESPONSE MUST BE A VALID JSON OBJECT with a single key "turn".
 The value of "turn" must be an array of action objects.
 Each object in the array represents a single character's action or dialogue, or a narrative description.
 
@@ -1381,47 +1260,44 @@ The JSON schema for each object is: { "characterName": string, "content": string
 
 Based on the conversation history, generate the next turn in the scene.`;
 
-    const body = {
-      model,
-      messages: [
-        { role: 'system', content: openAIPrompt },
-        ...mergedHistory.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-      temperature,
-      max_tokens: maxOutputTokens,
-      response_format: { type: 'json_object' },
-    };
+      const body = {
+        model,
+        messages: [
+          { role: 'system', content: openAIPrompt },
+          ...mergedHistory.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        ],
+        temperature,
+        max_tokens: maxOutputTokens,
+        response_format: { type: 'json_object' },
+      };
 
-    const response = await fetchWithRetry(API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS], {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+      const response = await fetchWithRetry(API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS], {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      let errorMessage = `API request failed with status ${response.status}: ${errorBody}`;
-      if (response.status === 401) {
-          errorMessage = ERROR_MESSAGES.API_KEY_INVALID(provider);
-      } else if (response.status === 429) {
-          errorMessage = ERROR_MESSAGES.RATE_LIMIT(provider);
+      if (!response.ok) {
+        const errorBody = await response.text();
+        const error = new Error(errorBody);
+        (error as any).status = response.status;
+        throw error;
       }
-      const error = new Error(errorMessage);
-      (error as any).status = response.status;
-      throw error;
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+      if (!content) throw new Error('Invalid response format from API.');
+      const parsed = JSON.parse(content);
+      if (!parsed.turn || !Array.isArray(parsed.turn))
+        throw new Error('API did not return a `turn` array.');
+      return parsed.turn as GroupTurnAction[];
     }
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-    if (!content) throw new Error('Invalid response format from API.');
-    const parsed = JSON.parse(content);
-    if (!parsed.turn || !Array.isArray(parsed.turn))
-      throw new Error('API did not return a `turn` array.');
-    return parsed.turn as GroupTurnAction[];
+  } catch (error) {
+    throw handleApiError(error, provider);
   }
 }

@@ -103,14 +103,17 @@ const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({ theme, onClose }) =
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 20, opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="theme-editor-title"
                 className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-md flex flex-col border border-slate-700"
                 onClick={(e) => e.stopPropagation()}
             >
                 <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
-                    <h2 className="text-xl font-bold font-display tracking-widest uppercase">
+                    <h2 id="theme-editor-title" className="text-xl font-bold font-display tracking-widest uppercase">
                         {theme ? 'Edit Theme' : 'Create Theme'}
                     </h2>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md">
+                    <button onClick={onClose} aria-label="Close theme editor" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md">
                         <Icon name="close" />
                     </button>
                 </header>

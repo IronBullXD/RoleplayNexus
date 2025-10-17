@@ -529,15 +529,19 @@ function SettingsModal({ onClose }: SettingsModalProps) {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 20, opacity: 0 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
         className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-5xl flex flex-col border border-slate-700 h-[90vh] max-h-[800px]"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
-          <h2 className="text-xl font-bold font-display tracking-widest uppercase">
+          <h2 id="settings-modal-title" className="text-xl font-bold font-display tracking-widest uppercase">
             Settings
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close settings"
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"
           >
             <Icon name="close" />

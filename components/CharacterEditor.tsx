@@ -253,12 +253,15 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 20, opacity: 0 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="character-editor-title"
         className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold font-display tracking-widest uppercase">
+            <h2 id="character-editor-title" className="text-xl font-bold font-display tracking-widest uppercase">
               {character ? 'Edit Character' : 'Create Character'}
             </h2>
             <button
@@ -271,6 +274,7 @@ function CharacterEditor({ character, onClose }: CharacterEditorProps) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close character editor"
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"
           >
             <Icon name="close" />

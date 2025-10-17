@@ -12,7 +12,7 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Replaced the constructor with a class property for state initialization. This is a more modern syntax and resolves issues with `this.state` and `this.props` type inference in class components.
+  // FIX: Use class properties for state and arrow functions for methods to ensure correct `this` binding.
   state: State = {
     hasError: false,
     error: undefined,

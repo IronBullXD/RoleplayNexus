@@ -34,6 +34,7 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                     type="button"
                     onClick={() => setIsOpen(p => !p)}
                     aria-expanded={isOpen}
+                    aria-controls="chat-settings-popover"
                     className="p-2 rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-crimson-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 text-slate-300 bg-slate-800/50 hover:bg-slate-700/50"
                     aria-label="Chat Settings"
                 >
@@ -41,7 +42,11 @@ const ChatSettingsPopover: React.FC<ChatSettingsPopoverProps> = ({ settings, wor
                 </button>
             </Tooltip>
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-96 bg-slate-900/95 backdrop-blur-md border border-slate-700/50 rounded-lg shadow-2xl z-20 p-5 animate-fade-in space-y-4">
+                <div 
+                    id="chat-settings-popover"
+                    role="group"
+                    className="absolute right-0 mt-2 w-96 bg-slate-900/95 backdrop-blur-md border border-slate-700/50 rounded-lg shadow-2xl z-20 p-5 animate-fade-in space-y-4"
+                >
                     {/* Header */}
                     <div className="flex items-center gap-3">
                         <Icon name="sliders" className="w-5 h-5 text-slate-400" />

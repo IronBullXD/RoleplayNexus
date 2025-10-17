@@ -5,7 +5,8 @@ import { useUIStore } from './uiStore';
 import { useSettingsStore } from './settingsStore';
 import { useWorldStore } from './worldStore';
 import { useCharacterStore } from './characterStore';
-import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages, isApiError } from '../../services/llmService';
+// FIX: Removed 'isApiError' from this import as it's not exported from llmService and was unused in this file.
+import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages } from '../../services/llmService';
 import { generateResponseWithThinking } from '../../services/thinkingService';
 import { logger } from '../../services/logger';
 import { ERROR_MESSAGES } from '../../services/errorMessages';
@@ -339,8 +340,8 @@ export const useChatStore = create<ChatStore>()(
             };
 
             set((state: ChatStore) => {
-// FIX: Safely handle characterSessions from persisted state which may be unknown or undefined.
-                const charSessions = (state.characterSessions || {}) as Record<string, string[]>;
+                // FIX: Cast characterSessions to `any` to bypass persistent state type issues.
+                const charSessions = (state.characterSessions as any) || {};
                 return {
                     sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
                     messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
@@ -444,11 +445,14 @@ export const useChatStore = create<ChatStore>()(
                 messageIds: newHistoryIds,
             };
             
-            set((state: ChatStore) => ({
-                sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
-// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
-                characterSessions: { ...state.characterSessions, [activeCharacterId]: [...((state.characterSessions as Record<string, string[]>)[activeCharacterId] || []), newSessionData.id] },
-            }));
+            set((state: ChatStore) => {
+                // FIX: Cast characterSessions to `any` to bypass persistent state type issues.
+                const charSessions = (state.characterSessions as any) || {};
+                return {
+                    sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
+                    characterSessions: { ...charSessions, [activeCharacterId]: [...(charSessions[activeCharacterId] || []), newSessionData.id] },
+                };
+            });
 
             useUIStore.getState().setActiveSessionId(newSessionData.id);
             return newSessionData.id;
@@ -464,8 +468,8 @@ export const useChatStore = create<ChatStore>()(
                 delete newSessions[sessionId];
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
-// FIX: Safely handle characterSessions from persisted state which may be unknown or undefined.
-                const newCharSessions = { ...(state.characterSessions || {}) } as Record<string, string[]>;
+                // FIX: Cast characterSessions to `any` to bypass persistent state type issues.
+                const newCharSessions = { ...((state.characterSessions as any) || {}) };
                 if (newCharSessions[characterId]) {
                     newCharSessions[characterId] = (newCharSessions[characterId] || []).filter(id => id !== sessionId);
                 }
@@ -620,8 +624,9 @@ export const useChatStore = create<ChatStore>()(
         // --- Cross-slice utility actions ---
         deleteChatsForCharacter: (characterId: string) => {
             set((state: ChatStore) => {
-// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
-                const sessionsToDelete = new Set((state.characterSessions as Record<string, string[]>)[characterId] || []);
+                // FIX: Cast characterSessions to `any` to bypass persistent state type issues.
+                const charSessions = (state.characterSessions as any) || {};
+                const sessionsToDelete = new Set(charSessions[characterId] || []);
                 const messagesToDelete = new Set<string>();
 
                 sessionsToDelete.forEach(sessionId => {
@@ -648,8 +653,8 @@ export const useChatStore = create<ChatStore>()(
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
                 
-                const newCharSessions = { ...state.characterSessions };
-                delete (newCharSessions as Record<string, string[]>)[characterId];
+                const newCharSessions = { ...charSessions };
+                delete newCharSessions[characterId];
 
                 return {
                     ...state,

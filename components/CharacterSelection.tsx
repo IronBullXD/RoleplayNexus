@@ -248,32 +248,42 @@ const CharacterCard: React.FC<{
             }}
             className="p-2 rounded-md bg-black/50 hover:bg-black/80 backdrop-blur-sm"
             aria-label="Character actions"
+            aria-expanded={isMenuOpen}
+            aria-controls={`character-actions-menu-${character.id}`}
           >
             <Icon name="ellipsis-vertical" className="w-5 h-5 text-white" />
           </button>
           {isMenuOpen && (
-            <div className="absolute right-0 mt-2 w-40 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-md shadow-xl z-30 py-1 animate-fade-in">
+            <div 
+              id={`character-actions-menu-${character.id}`}
+              role="menu"
+              className="absolute right-0 mt-2 w-40 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-md shadow-xl z-30 py-1 animate-fade-in"
+            >
               <button
                 onClick={() => handleMenuAction(() => onEdit(character))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+                role="menuitem"
               >
                 <Icon name="edit" className="w-4 h-4" /> Edit
               </button>
               <button
                 onClick={() => handleMenuAction(() => onDuplicate(character.id))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+                role="menuitem"
               >
                 <Icon name="duplicate" className="w-4 h-4" /> Duplicate
               </button>
               <button
                 onClick={() => handleMenuAction(() => onExport(character))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700/50 transition-colors"
+                role="menuitem"
               >
                 <Icon name="export" className="w-4 h-4" /> Export
               </button>
               <button
                 onClick={() => handleMenuAction(() => onDelete(character.id))}
                 className="w-full flex items-center gap-3 text-left px-3 py-1.5 text-sm text-ember-400 hover:bg-slate-700/50 transition-colors"
+                role="menuitem"
               >
                 <Icon name="delete" className="w-4 h-4" /> Delete
               </button>

@@ -153,12 +153,15 @@ const TemplateSelectionModal: React.FC<{
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 20, opacity: 0 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-selection-title"
         className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-4xl border border-slate-700"
         onClick={e => e.stopPropagation()}
       >
         <header className="p-4 border-b border-slate-800 flex justify-between items-center">
-          <h2 className="text-xl font-bold font-display tracking-widest uppercase">Create a New World</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"><Icon name="close" /></button>
+          <h2 id="template-selection-title" className="text-xl font-bold font-display tracking-widest uppercase">Create a New World</h2>
+          <button onClick={onClose} aria-label="Close template selection" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"><Icon name="close" /></button>
         </header>
         <main className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -357,11 +360,14 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="worlds-page-title"
           className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-4xl flex flex-col border border-slate-700 h-[80vh]"
           onClick={(e) => e.stopPropagation()}
         >
           <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
-            <h2 className="text-xl font-bold font-display tracking-widest uppercase">Worlds</h2>
+            <h2 id="worlds-page-title" className="text-xl font-bold font-display tracking-widest uppercase">Worlds</h2>
             <div className="flex items-center gap-2">
                 <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search worlds..." className="bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 px-3 text-sm" />
                 <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-slate-800/60 border-2 border-slate-700 rounded-lg py-1.5 px-3 text-sm">
@@ -374,7 +380,7 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
                     <option value="createdAt-desc">Sort: Newest</option>
                     <option value="createdAt-asc">Sort: Oldest</option>
                 </select>
-                <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md ml-4"><Icon name="close" /></button>
+                <button onClick={onClose} aria-label="Close worlds page" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md ml-4"><Icon name="close" /></button>
             </div>
           </header>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">

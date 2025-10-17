@@ -1,5 +1,5 @@
-import { World, WorldEntry, ValidationIssue, LLMProvider } from '../types';
-import { checkForInconsistencies } from './llmService';
+import { World, WorldEntry, ValidationIssue, LLMProvider, AiAnalysisReport } from '../types';
+import { runAiWorldAnalysis } from './llmService';
 import { ERROR_MESSAGES } from './errorMessages';
 
 const MIN_CONTENT_LENGTH = 50; // characters
@@ -273,7 +273,7 @@ export function validateWorld(world: World): ValidationIssue[] {
 }
 
 
-export async function runConsistencyCheck({
+export async function runAiAnalysis({
     world,
     provider,
     apiKey,
@@ -283,21 +283,16 @@ export async function runConsistencyCheck({
     provider: LLMProvider,
     apiKey: string,
     model: string
-}): Promise<ValidationIssue[]> {
+}): Promise<AiAnalysisReport> {
     if (!world.entries || world.entries.filter(e => e.enabled).length < 2) {
-        return [];
+        return { issues: [], coherence: { score: 0, summary: "Not enough content for a full AI analysis.", positivePoints: [], improvementAreas: ["Add more content to your world entries."] }};
     }
     
     if (!model || !apiKey) {
         throw new Error(ERROR_MESSAGES.API_KEY_MISSING(provider));
     }
 
-    const reports = await checkForInconsistencies({ world, provider, apiKey, model });
+    const report = await runAiWorldAnalysis({ world, provider, apiKey, model });
     
-    return reports.map(report => ({
-        type: 'Contradiction',
-        severity: 'warning',
-        message: report.explanation,
-        entryIds: report.conflictingEntryIds,
-    }));
+    return report;
 }

@@ -32,17 +32,19 @@ export async function generateContentSuggestions({
   
   const systemPrompt = `You are an expert world-building editor and narrative designer. Your task is to analyze a collection of lore entries for a fictional world and provide actionable suggestions to improve its depth, consistency, and completeness.
 
-You will identify four types of issues:
+You will identify five types of issues:
 1.  **incomplete_entry**: An entry that is too short, lacks detail, or feels like a placeholder. Suggest specific details that could be added.
-2.  **missing_keyword**: A piece of text mentions a concept or name that is a keyword for another entry, but that other entry is not linked. Point this out.
+2.  **cross_reference_suggestion**: An entry's content mentions a concept or name that is a keyword for another entry, but that keyword is missing from the mentioned entry.
 3.  **expansion**: An opportunity to add a new related entry or expand on an existing concept to flesh out the world. Suggest a new entry name and concept.
 4.  **contradiction**: Logical inconsistencies or direct contradictions between entries. (This is similar to validation, but you can be more nuanced and find subtle issues).
+5.  **keyword_suggestion**: An entry is missing obvious keywords based on its content. Suggest a list of relevant keywords.
 
 CRITICAL INSTRUCTIONS:
 - Read all provided lore entries carefully. Each has a unique ID.
 - Your response MUST be a valid JSON array of suggestion objects.
 - For each suggestion, provide the type, a concise descriptive message, and the IDs of the relevant entries.
-- For 'missing_keyword' suggestions, you MUST include the keyword to add in the 'relatedData.keywordToAdd' field.
+- For 'cross_reference_suggestion' suggestions, you MUST include the keyword to add in the 'relatedData.keywordToAdd' field.
+- For 'keyword_suggestion' suggestions, you MUST include the suggested keywords in the 'relatedData.keywordsToAdd' field as an array of strings.
 - Do not suggest more than 5-7 high-quality improvements. Focus on the most impactful suggestions.
 - If the world is already excellent and you can't find any issues, return an empty array.
 `;
@@ -76,7 +78,7 @@ CRITICAL INSTRUCTIONS:
             properties: {
               type: {
                 type: Type.STRING,
-                enum: ['missing_keyword', 'incomplete_entry', 'contradiction', 'expansion'],
+                enum: ['cross_reference_suggestion', 'incomplete_entry', 'contradiction', 'expansion', 'keyword_suggestion'],
               },
               message: {
                 type: Type.STRING,
@@ -93,7 +95,12 @@ CRITICAL INSTRUCTIONS:
                 properties: {
                     keywordToAdd: {
                         type: Type.STRING,
-                        description: "The keyword that should be added. Only for 'missing_keyword' type."
+                        description: "The keyword that should be added. Only for 'cross_reference_suggestion' type."
+                    },
+                    keywordsToAdd: {
+                        type: Type.ARRAY,
+                        description: "An array of suggested keywords. Only for 'keyword_suggestion' type.",
+                        items: { type: Type.STRING }
                     }
                 }
               },

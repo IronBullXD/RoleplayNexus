@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { World, WorldEntry, WorldEntryCategory, ValidationIssue, ContentSuggestion } from '../types';
+import { World, WorldEntry, WorldEntryCategory, ValidationIssue, ContentSuggestion, WorldCoherenceReport, AiAnalysisReport } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
+import { useWorldStore } from '../store/stores/worldStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { warmWorldCache } from '../services/llmService';
+import { logger } from '../services/logger';
+import { DEFAULT_WORLD_TEMPLATES, WORLD_CATEGORIES } from '../constants';
 import { useUIStore } from '../store/stores/uiStore';
 import { useSettingsStore } from '../store/stores/settingsStore';
 import { Tooltip } from './Tooltip';
-import { motion, AnimatePresence } from 'framer-motion';
-import { validateWorld, runConsistencyCheck } from '../services/worldValidationService';
+import { validateWorld, runAiAnalysis } from '../services/worldValidationService';
 import ValidationResultsPanel from './ValidationResultsPanel';
 import { LLMProvider } from '../types';
 import { useVirtualScroll } from '../hooks/useVirtualScroll';
-import { WORLD_CATEGORIES } from '../constants';
 import { generateContentSuggestions } from '../services/worldSuggestionService';
 
 interface WorldEditorPageProps {
@@ -423,10 +426,11 @@ const SuggestionsPanel: React.FC<{
     , [entries]);
     
     const suggestionMetadata: Record<ContentSuggestion['type'], { icon: string; color: string; title: string }> = {
-      missing_keyword: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Missing Keywords' },
+      cross_reference_suggestion: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Cross-Reference Suggestions' },
       incomplete_entry: { icon: 'lightbulb', color: 'text-sky-400', title: 'Incomplete Entries' },
       expansion: { icon: 'sparkles', color: 'text-emerald-400', title: 'Expansion Ideas' },
       contradiction: { icon: 'zap', color: 'text-purple-400', title: 'Potential Contradictions' },
+      keyword_suggestion: { icon: 'sparkles', color: 'text-emerald-400', title: 'Keyword Suggestions' },
     };
     
     const groupedSuggestions = suggestions.reduce((acc, suggestion) => {
@@ -449,15 +453,18 @@ const SuggestionsPanel: React.FC<{
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 20, opacity: 0 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="suggestions-panel-title"
                 className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col border border-slate-700"
                 onClick={e => e.stopPropagation()}
             >
                 <header className="p-4 border-b border-slate-800 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <Icon name="sparkles" className="w-6 h-6 text-emerald-400" />
-                        <h2 className="text-xl font-bold font-display tracking-widest uppercase">AI Suggestions for "{worldName}"</h2>
+                        <h2 id="suggestions-panel-title" className="text-xl font-bold font-display tracking-widest uppercase">AI Suggestions for "{worldName}"</h2>
                     </div>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"><Icon name="close" /></button>
+                    <button onClick={onClose} aria-label="Close AI suggestions" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"><Icon name="close" /></button>
                 </header>
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                     {suggestions.length === 0 ? (
@@ -488,13 +495,22 @@ const SuggestionsPanel: React.FC<{
                                                             Go to: "{entryNameMap.get(id) || 'Unknown'}"
                                                         </button>
                                                     ))}
-                                                    {suggestion.type === 'missing_keyword' && suggestion.relatedData?.keywordToAdd && (
+                                                    {suggestion.type === 'cross_reference_suggestion' && suggestion.relatedData?.keywordToAdd && (
                                                         <button
                                                             onClick={() => onApplyFix(suggestion)}
                                                             className="px-2 py-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 rounded-md hover:bg-emerald-800/50 flex items-center gap-1"
                                                         >
                                                             <Icon name="add" className="w-3 h-3" />
                                                             Add Keyword
+                                                        </button>
+                                                    )}
+                                                    {suggestion.type === 'keyword_suggestion' && suggestion.relatedData?.keywordsToAdd && (
+                                                        <button
+                                                            onClick={() => onApplyFix(suggestion)}
+                                                            className="px-2 py-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 rounded-md hover:bg-emerald-800/50 flex items-center gap-1"
+                                                        >
+                                                            <Icon name="add" className="w-3 h-3" />
+                                                            Add All Keywords
                                                         </button>
                                                     )}
                                                 </div>
@@ -546,6 +562,9 @@ const QuickJumpModal = ({ entries, onSelect, onClose }: {
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -20, opacity: 0 }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Quick jump to entry"
                 className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-lg shadow-2xl flex flex-col max-h-[60vh]"
                 onClick={e => e.stopPropagation()}
             >
@@ -604,10 +623,10 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   const entryListRef = useRef<HTMLDivElement>(null);
   const [entrySearch, setEntrySearch] = useState('');
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [coherenceReport, setCoherenceReport] = useState<WorldCoherenceReport | null>(null);
   const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
   const [includeAiCheck, setIncludeAiCheck] = useState(false);
   const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
-  const [recentEntryIds, setRecentEntryIds] = useState<string[]>([]);
   const [isQuickJumpOpen, setIsQuickJumpOpen] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
@@ -646,17 +665,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     }
     setIsValidationPanelOpen(false);
     setValidationIssues([]);
-    setRecentEntryIds([]);
   }, [world]);
-
-  useEffect(() => {
-      if (activeEntryId) {
-          setRecentEntryIds(prev => {
-              const newRecents = [activeEntryId, ...prev.filter(id => id !== activeEntryId)];
-              return newRecents.slice(0, 5); // Keep last 5
-          });
-      }
-  }, [activeEntryId]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -805,6 +814,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     const currentWorld = formData as World;
     const localIssues = validateWorld(currentWorld);
     let allIssues = [...localIssues];
+    setCoherenceReport(null);
     
     if (includeAiCheck) {
         setIsCheckingConsistency(true);
@@ -816,8 +826,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                 throw new Error(`API key or model is not configured for ${provider}. Please check your settings.`);
             }
 
-            const aiIssues = await runConsistencyCheck({ world: currentWorld, provider, apiKey, model });
-            allIssues = [...allIssues, ...aiIssues];
+            const aiReport = await runAiAnalysis({ world: currentWorld, provider, apiKey, model });
+            allIssues = [...allIssues, ...aiReport.issues];
+            setCoherenceReport(aiReport.coherence || null);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
             const errorIssue: ValidationIssue = {
@@ -879,20 +890,31 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   }, []);
 
   const handleApplySuggestion = useCallback((suggestion: ContentSuggestion) => {
-      if (suggestion.type === 'missing_keyword' && suggestion.relatedData?.keywordToAdd) {
-          const entryId = suggestion.entryIds[0];
-          const keyword = suggestion.relatedData.keywordToAdd;
-          if (entryId && keyword) {
-              const entry = formData.entries?.find(e => e.id === entryId);
-              if (entry) {
-                  const updatedKeys = [...(entry.keys || []), keyword];
-                  handleEntryChange(entryId, 'keys', updatedKeys);
-                  
-                  // Remove the applied suggestion from the list
-                  setSuggestions(prev => prev.filter(s => s !== suggestion));
-              }
-          }
-      }
+    if (suggestion.type === 'cross_reference_suggestion' && suggestion.relatedData?.keywordToAdd) {
+        const entryId = suggestion.entryIds[0];
+        const keyword = suggestion.relatedData.keywordToAdd;
+        if (entryId && keyword) {
+            const entry = formData.entries?.find(e => e.id === entryId);
+            if (entry) {
+                handleEntryChange(entryId, 'keys', [...(entry.keys || []), keyword]);
+                setSuggestions(prev => prev.filter(s => s !== suggestion));
+            }
+        }
+    } else if (suggestion.type === 'keyword_suggestion' && suggestion.relatedData?.keywordsToAdd) {
+        const entryId = suggestion.entryIds[0];
+        const keywords = suggestion.relatedData.keywordsToAdd;
+        if (entryId && keywords) {
+            const entry = formData.entries?.find(e => e.id === entryId);
+            if (entry) {
+                const existingKeys = new Set((entry.keys || []).map(k => k.toLowerCase()));
+                const newKeys = keywords.filter(k => !existingKeys.has(k.toLowerCase()));
+                if (newKeys.length > 0) {
+                    handleEntryChange(entryId, 'keys', [...(entry.keys || []), ...newKeys]);
+                }
+                setSuggestions(prev => prev.filter(s => s !== suggestion));
+            }
+        }
+    }
   }, [formData.entries, handleEntryChange]);
   
   const activeEntry = useMemo(
@@ -920,25 +942,14 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
 
   const displayList = useMemo<ListItem[]>(() => {
     const list: ListItem[] = [];
-    const recent = recentEntryIds
-        .map(id => filteredEntries.find(e => e.id === id))
-        .filter((e): e is WorldEntry => !!e);
-    
-    const specialIds = new Set(recent.map(e => e.id));
-    const mainEntries = filteredEntries.filter(e => !specialIds.has(e.id));
-    
     const UNCATEGORIZED = '(No Category)';
     const grouped: Record<string, WorldEntry[]> = {};
-    mainEntries.forEach((entry) => {
+    
+    filteredEntries.forEach((entry) => {
         const category = entry.category || UNCATEGORIZED;
         if (!grouped[category]) grouped[category] = [];
         grouped[category].push(entry);
     });
-
-    if (recent.length > 0) {
-        list.push({ type: 'header', id: 'header-recent', label: 'Recent', icon: 'history', color: 'text-sky-400' });
-        recent.forEach(entry => list.push({ type: 'entry', data: entry }));
-    }
 
     Object.entries(grouped)
         .sort(([aCat], [bCat]) => {
@@ -954,7 +965,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
         });
       
     return list;
-  }, [filteredEntries, recentEntryIds]);
+  }, [filteredEntries]);
 
   const { handleScroll, virtualItems, totalHeight } = useVirtualScroll({
     items: displayList,
@@ -977,16 +988,19 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="world-editor-title"
           className="bg-slate-900 rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col border border-slate-700"
           onClick={(e) => e.stopPropagation()}
         >
           <header className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-2 text-xl font-bold font-display tracking-widest uppercase">
+            <div id="world-editor-title" className="flex items-center gap-2 text-xl font-bold font-display tracking-widest uppercase">
                 <span className="text-slate-400">Worlds</span>
                 <span className="text-slate-600">/</span>
                 <span className="text-crimson-400">{formData.name || '...'}</span>
             </div>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md">
+            <button onClick={onClose} aria-label="Close world editor" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md">
                 <Icon name="close" />
             </button>
           </header>
@@ -1243,6 +1257,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
         {isValidationPanelOpen && (
           <ValidationResultsPanel 
             issues={validationIssues}
+            coherenceReport={coherenceReport}
             onClose={() => setIsValidationPanelOpen(false)}
             onSelectEntry={handleSelectEntryFromIssue}
             worldName={formData.name || 'Unnamed World'}

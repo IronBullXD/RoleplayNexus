@@ -14,28 +14,20 @@ import {
   WorldEntry,
 } from '../types';
 import { Icon, IconButton } from './Icon';
-import SimpleMarkdown from './SimpleMarkdown';
 import { logger } from '../services/logger';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import Avatar from './Avatar';
 import ChatSettingsPopover from './ChatSettingsPopover';
-import { Tooltip } from './Tooltip';
 import { usePaginatedMessages } from '../hooks/usePaginatedMessages';
-import {
-  DateSeparator,
-  SystemMessage,
-  ActionButton,
-} from './ChatCommon';
+import { DateSeparator } from './ChatCommon';
 import ChatMessageSkeleton from './ChatMessageSkeleton';
-import { AnimatePresence } from 'framer-motion';
-import { findRelevantEntries } from '../services/llmService';
-import SuggestionsBar from './SuggestionsBar';
-import ThinkingProcessDisplay from './ThinkingProcessDisplay';
 import { useUIStore } from '../store/stores/uiStore';
 import { useCharacterStore } from '../store/stores/characterStore';
 import { useChatStore } from '../store/stores/chatStore';
 import { useSettingsStore } from '../store/stores/settingsStore';
 import { useWorldStore } from '../store/stores/worldStore';
+import ChatMessage from './ChatMessage';
+import ChatInput from './ChatInput';
 
 interface ChatWindowProps {
   onNavigateToHistory: () => void;
@@ -51,214 +43,6 @@ const isSameDay = (ts1?: number, ts2?: number) => {
     d1.getDate() === d2.getDate()
   );
 };
-
-interface ChatMessageProps {
-  message: Message;
-  character: Character | null;
-  userPersona: Persona | null;
-  isLastMessage: boolean;
-  isLoading: boolean;
-  onDelete: (messageId: string) => void;
-  onRegenerate: () => void;
-  onFork: (messageId: string) => void;
-  isEditing: boolean;
-  editingText: string;
-  onSetEditingText: (text: string) => void;
-  onStartEdit: (message: Message) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  world: World | null;
-  showThinking: boolean;
-}
-
-const ChatMessage = React.memo(function ChatMessage({
-  message,
-  character,
-  userPersona,
-  isLastMessage,
-  isLoading,
-  onDelete,
-  onRegenerate,
-  onFork,
-  isEditing,
-  editingText,
-  onSetEditingText,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
-  world,
-  showThinking,
-}: ChatMessageProps) {
-  if (message.role === 'system') {
-    return <SystemMessage message={message} />;
-  }
-
-  const isUser = message.role === 'user';
-  const avatar = isUser ? userPersona?.avatar : character?.avatar;
-  const isError = message.content.startsWith('Error:');
-  const editTextAreaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (isEditing && editTextAreaRef.current) {
-      editTextAreaRef.current.focus();
-      const el = editTextAreaRef.current;
-      el.style.height = 'auto';
-      el.style.height = `${el.scrollHeight}px`;
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    const el = editTextAreaRef.current;
-    if (el && isEditing) {
-      el.style.height = 'auto';
-      el.style.height = `${el.scrollHeight}px`;
-    }
-  }, [editingText, isEditing]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        onSaveEdit();
-      }
-      if (e.key === 'Escape') {
-        onCancelEdit();
-      }
-    },
-    [onSaveEdit, onCancelEdit],
-  );
-
-  return (
-    <div
-      className={`group flex items-start gap-3 my-5 animate-message-in ${
-        isUser ? 'flex-row-reverse' : ''
-      }`}
-    >
-      <Avatar
-        src={avatar}
-        alt="avatar"
-        shape="square"
-        className="w-10 h-10 mt-1"
-      />
-      <div
-        className={`flex-1 min-w-0 flex ${
-          isUser ? 'justify-end' : 'justify-start'
-        }`}
-      >
-        <div
-          className={`p-4 rounded-2xl max-w-2xl lg:max-w-3xl relative ${
-            isUser
-              ? 'bg-slate-700 text-slate-100 rounded-tr-lg chat-bubble-right'
-              : isError
-              ? 'bg-red-500/20 text-red-300 rounded-tl-lg'
-              : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
-          }`}
-        >
-          {!isEditing && !message.isThinking && (
-            <div
-              className={`absolute flex items-center gap-0.5 p-1 bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
-                isUser ? 'left-4 -top-4' : 'right-4 -top-4'
-              }`}
-            >
-              <ActionButton
-                icon="fork"
-                label="Fork Chat"
-                onClick={() => onFork(message.id)}
-              />
-              <ActionButton
-                icon="delete"
-                label="Delete Message"
-                onClick={() => onDelete(message.id)}
-              />
-              <ActionButton
-                icon="edit"
-                label="Edit Message"
-                onClick={() => onStartEdit(message)}
-              />
-              {!isUser && isLastMessage && (
-                <ActionButton
-                  icon="redo"
-                  label="Regenerate"
-                  onClick={onRegenerate}
-                  disabled={isLoading}
-                  className={isLoading ? 'animate-spin' : ''}
-                />
-              )}
-            </div>
-          )}
-          {isEditing ? (
-            <div className="animate-fade-in" style={{ minWidth: '150px' }}>
-              <div className="grid">
-                <div
-                  aria-hidden="true"
-                  className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-relaxed"
-                >
-                  {editingText || ' '}
-                  {'\u00A0'}
-                </div>
-                <textarea
-                  ref={editTextAreaRef}
-                  value={editingText}
-                  onChange={(e) => onSetEditingText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-relaxed ${
-                    isUser ? 'text-slate-100' : 'text-slate-200'
-                  }`}
-                  rows={1}
-                  spellCheck={false}
-                />
-              </div>
-              <div
-                className={`flex justify-end gap-2 items-center pt-2 mt-2 border-t ${
-                  isUser ? 'border-slate-600' : 'border-slate-700/50'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={onCancelEdit}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                    isUser
-                      ? 'text-slate-300 bg-slate-600/50 hover:bg-slate-600'
-                      : 'text-slate-300 bg-slate-700/50 hover:bg-slate-700'
-                  }`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={onSaveEdit}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                    isUser
-                      ? 'text-white bg-crimson-600 hover:bg-crimson-500'
-                      : 'text-white bg-crimson-600 hover:bg-crimson-500'
-                  }`}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : message.isThinking ? (
-             showThinking && message.thinkingProcess && message.thinkingProcess.length > 0 ? (
-                 <ThinkingProcessDisplay steps={message.thinkingProcess} />
-             ) : (
-                <div className="flex items-center gap-2 text-slate-400">
-                    <Icon name="brain" className="w-4 h-4 animate-pulse" />
-                    <span className="text-sm font-semibold">Thinking...</span>
-                </div>
-             )
-          ) : (
-            <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
-              <SimpleMarkdown text={message.content} world={world} />
-              {isLastMessage && isLoading && message.role === 'assistant' && (
-                <span className="inline-block w-1 h-4 bg-slate-400 ml-1 animate-pulse" />
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
 
 function formatRelativeTime(timestamp: number): string {
   const now = new Date();
@@ -327,9 +111,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   );
 
   const [input, setInput] = useState('');
-  const [suggestions, setSuggestions] = useState<WorldEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const handleEditMessage = useCallback((messageId: string, newContent: string) => {
@@ -386,36 +168,6 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     }
   }, [messages.length, isLoading]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.max(
-        56,
-        Math.min(scrollHeight, 200),
-      )}px`;
-    }
-  }, [input]);
-
-  useEffect(() => {
-    if (activeWorld && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      // Only generate suggestions after the assistant replies
-      if (lastMessage.role === 'assistant') {
-        const relevantEntries = findRelevantEntries({
-          messages: messages.slice(-4), // Check last 4 messages for context
-          world: activeWorld,
-        });
-        setSuggestions(relevantEntries);
-      } else {
-        // Clear suggestions when user sends a message
-        setSuggestions([]);
-      }
-    } else {
-      setSuggestions([]);
-    }
-  }, [messages, activeWorld]);
-
   const handleAction = useCallback(() => {
     if (isLoading) return;
     if (input.trim()) {
@@ -425,32 +177,6 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
       continueGeneration(activeSessionId);
     }
   }, [isLoading, input, messages, activeSessionId, sendMessage, continueGeneration]);
-
-  const handleFormSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      handleAction();
-    },
-    [handleAction],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleAction();
-      }
-    },
-    [handleAction],
-  );
-
-  const handleSuggestionClick = useCallback((entry: WorldEntry) => {
-    setInput(
-      (prev) => `${prev}${prev.trim().length > 0 ? ' ' : ''}${entry.content}`.trim(),
-    );
-    setSuggestions([]); // Hide suggestions after one is clicked
-    textareaRef.current?.focus();
-  }, []);
 
   const lastMessageTimestamp = useMemo(() => {
     const lastMsg = messages.filter((m) => m.role !== 'system').pop();
@@ -465,6 +191,18 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
       }
     }
   }, [character, newSession, setActiveSessionId]);
+  
+  const handleDelete = useCallback((messageId: string) => {
+    if (activeSessionId) deleteMessage(activeSessionId, messageId);
+  }, [activeSessionId, deleteMessage]);
+  
+  const handleRegenerate = useCallback(() => {
+    if (activeSessionId) regenerateResponse(activeSessionId);
+  }, [activeSessionId, regenerateResponse]);
+  
+  const handleFork = useCallback((messageId: string) => {
+    if (activeSessionId) forkChat(activeSessionId, messageId);
+  }, [activeSessionId, forkChat]);
 
   if (!character || !session) return null;
 
@@ -566,9 +304,9 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
                 userPersona={userPersona}
                 isLastMessage={msg.id === lastMessage?.id}
                 isLoading={isLoading}
-                onDelete={(messageId) => activeSessionId && deleteMessage(activeSessionId, messageId)}
-                onRegenerate={() => activeSessionId && regenerateResponse(activeSessionId)}
-                onFork={(messageId) => activeSessionId && forkChat(activeSessionId, messageId)}
+                onDelete={handleDelete}
+                onRegenerate={handleRegenerate}
+                onFork={handleFork}
                 isEditing={msg.id === editingMessageId}
                 editingText={editingText}
                 onSetEditingText={setEditingText}
@@ -585,62 +323,17 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
         </div>
       </div>
 
-      <div className="px-3 pb-3 pt-2 mt-auto">
-        <div className="max-w-4xl w-full mx-auto">
-          {error && (
-            <p className="text-red-400 text-sm mb-2 text-center bg-red-900/50 border border-red-500/50 p-2 rounded-md">
-              {error}
-            </p>
-          )}
-          <AnimatePresence>
-            {suggestions.length > 0 && (
-              <SuggestionsBar
-                suggestions={suggestions}
-                onSuggestionClick={handleSuggestionClick}
-                onClose={() => setSuggestions([])}
-              />
-            )}
-          </AnimatePresence>
-          <form onSubmit={handleFormSubmit} className="relative w-full">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`Message ${character.name}...`}
-              className="w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-4 pr-20 resize-none outline-none text-base text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-crimson-500 focus:border-crimson-500 transition-all duration-200 custom-scrollbar min-h-[3.5rem]"
-              rows={1}
-              disabled={isLoading}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {isLoading ? (
-                <button
-                  type="button"
-                  onClick={() => stopGeneration()}
-                  className="w-10 h-10 flex items-center justify-center rounded-md bg-ember-600 text-white hover:bg-ember-500 transition-colors shadow-lg"
-                  aria-label="Stop generation"
-                >
-                  <Icon name="stop" className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!canSubmit && !canContinue}
-                  className="w-10 h-10 flex items-center justify-center rounded-md bg-crimson-600 text-white disabled:bg-slate-700 disabled:cursor-not-allowed hover:bg-crimson-500 transition-colors shadow-lg shadow-crimson-900/50"
-                  aria-label={
-                    canContinue ? 'Continue generation' : 'Send message'
-                  }
-                >
-                  <Icon
-                    name={canContinue ? 'ellipsis-horizontal' : 'send'}
-                    className="w-5 h-5"
-                  />
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      </div>
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        handleAction={handleAction}
+        isLoading={isLoading}
+        error={error}
+        stopGeneration={stopGeneration}
+        characterName={character.name}
+        canSubmit={canSubmit}
+        canContinue={canContinue}
+      />
     </div>
   );
 }

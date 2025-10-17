@@ -23,7 +23,7 @@ export interface Persona {
 }
 
 export interface Character {
-  id: string;
+  id:string;
   name: string;
   avatar: string;
   greeting: string;
@@ -162,7 +162,8 @@ export type ValidationType =
   | 'InconsistentFormatting'
   | 'MissingKeywords'
   | 'DuplicateContent'
-  | 'InvalidEntry';
+  | 'InvalidEntry'
+  | 'InconsistentVoice';
 
 export interface ValidationIssue {
   type: ValidationType;
@@ -179,12 +180,25 @@ export interface ValidationIssue {
 }
 
 export interface ContentSuggestion {
-  type: 'missing_keyword' | 'incomplete_entry' | 'contradiction' | 'expansion';
+  type: 'cross_reference_suggestion' | 'incomplete_entry' | 'contradiction' | 'expansion' | 'keyword_suggestion';
   message: string;
   entryIds: string[];
   relatedData?: {
     keywordToAdd?: string;
+    keywordsToAdd?: string[];
   };
+}
+
+export interface WorldCoherenceReport {
+  score: number; // 0-100
+  summary: string;
+  positivePoints: string[];
+  improvementAreas: string[];
+}
+
+export interface AiAnalysisReport {
+    issues: ValidationIssue[];
+    coherence?: WorldCoherenceReport;
 }
 
 export interface ThemeConfig {
