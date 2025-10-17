@@ -338,12 +338,15 @@ export const useChatStore = create<ChatStore>()(
                 memoryEnabled: false,
             };
 
-            set((state: ChatStore) => ({
-                sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
-                messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
-// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
-                characterSessions: { ...state.characterSessions, [characterId]: [...((state.characterSessions as Record<string, string[]>)[characterId] || []), newSessionData.id] },
-            }));
+            set((state: ChatStore) => {
+// FIX: Safely handle characterSessions from persisted state which may be unknown or undefined.
+                const charSessions = (state.characterSessions || {}) as Record<string, string[]>;
+                return {
+                    sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
+                    messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
+                    characterSessions: { ...charSessions, [characterId]: [...(charSessions[characterId] || []), newSessionData.id] },
+                };
+            });
             
             return newSessionData.id;
         },
@@ -461,9 +464,11 @@ export const useChatStore = create<ChatStore>()(
                 delete newSessions[sessionId];
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
-                const newCharSessions = { ...state.characterSessions };
-// FIX: Cast characterSessions to handle potential 'unknown' type from persisted state.
-                newCharSessions[characterId] = ((newCharSessions as Record<string, string[]>)[characterId] || []).filter(id => id !== sessionId);
+// FIX: Safely handle characterSessions from persisted state which may be unknown or undefined.
+                const newCharSessions = { ...(state.characterSessions || {}) } as Record<string, string[]>;
+                if (newCharSessions[characterId]) {
+                    newCharSessions[characterId] = (newCharSessions[characterId] || []).filter(id => id !== sessionId);
+                }
 
                 return {
                     sessions: newSessions,

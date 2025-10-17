@@ -28,6 +28,22 @@ export const useWorldStore = create<WorldStore>()(
 
       // --- Actions ---
       saveWorld: (world) => {
+        // Validate world before saving
+        if (!world.id || typeof world.id !== 'string') {
+          console.error('Invalid world: missing or invalid id');
+          return;
+        }
+        
+        if (!world.name || typeof world.name !== 'string' || world.name.trim().length === 0) {
+          console.error('Invalid world: missing or invalid name');
+          return;
+        }
+
+        if (!Array.isArray(world.entries)) {
+          console.error('Invalid world: entries must be an array');
+          return;
+        }
+
         set((state) => {
           const now = Date.now();
           const existingWorld = state.worlds.find((w) => w.id === world.id);
@@ -72,22 +88,55 @@ export const useWorldStore = create<WorldStore>()(
       },
 
       importWorlds: (imported) => {
-        const existingIds = new Set(get().worlds.map((w) => w.id));
-        const newWorlds = imported.filter(
-          (iw) => iw && typeof iw === 'object' && 'id' in iw && 'name' in iw && 'entries' in iw && !existingIds.has(iw.id),
-        );
-        set((state) => ({ worlds: [...state.worlds, ...newWorlds] }));
-        alert(`${newWorlds.length} new world(s) imported successfully!`);
+        try {
+          if (!Array.isArray(imported)) {
+            throw new Error('Imported data must be an array');
+          }
+          
+          const existingIds = new Set(get().worlds.map((w) => w.id));
+          const newWorlds = imported.filter(
+            (iw) => {
+              try {
+                return iw && 
+                       typeof iw === 'object' && 
+                       'id' in iw && 
+                       'name' in iw && 
+                       'entries' in iw && 
+                       typeof iw.id === 'string' &&
+                       typeof iw.name === 'string' &&
+                       Array.isArray(iw.entries) &&
+                       !existingIds.has(iw.id);
+              } catch {
+                return false; // Skip invalid entries
+              }
+            }
+          );
+          
+          if (newWorlds.length > 0) {
+            set((state) => ({ worlds: [...state.worlds, ...newWorlds] }));
+            alert(`${newWorlds.length} new world(s) imported successfully!`);
+          } else {
+            alert('No valid new worlds found to import.');
+          }
+        } catch (error) {
+          console.error('Error importing worlds:', error);
+          alert(`Failed to import worlds: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       },
 
       logWorldEntryInteraction: (worldId, entryId) => {
         set((state) => {
-          const interactions = JSON.parse(JSON.stringify(state.worldEntryInteractions));
-          if (!interactions[worldId]) interactions[worldId] = {};
-          if (!interactions[worldId][entryId]) interactions[worldId][entryId] = { viewCount: 0, lastViewed: 0 };
-          interactions[worldId][entryId].viewCount += 1;
-          interactions[worldId][entryId].lastViewed = Date.now();
-          return { worldEntryInteractions: interactions };
+          const newInteractions = {
+            ...state.worldEntryInteractions,
+            [worldId]: {
+              ...(state.worldEntryInteractions[worldId] || {}),
+              [entryId]: {
+                viewCount: ((state.worldEntryInteractions[worldId]?.[entryId]?.viewCount) || 0) + 1,
+                lastViewed: Date.now(),
+              },
+            },
+          };
+          return { worldEntryInteractions: newInteractions };
         });
       },
     }),

@@ -379,23 +379,25 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       </InspectorSection>
 
       <InspectorSection title="Linked Lore" icon="book-open">
-        <div className="p-2 bg-slate-800/50 border-2 border-slate-700 rounded-md min-h-[40px] flex flex-wrap gap-2 items-center">
+        <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 bg-slate-800/50 border-2 border-slate-700 rounded-md">
           {linkedEntries.length > 0 ? (
-            linkedEntries.map((linked) => (
-              <div
-                key={linked.id}
-                className="flex items-center gap-1.5 px-2 py-1 text-xs text-crimson-300 bg-crimson-900/50 border border-crimson-700/50 rounded-full"
-              >
-                <Icon
-                  name={
-                    categoryIcons[linked.category || WorldEntryCategory.LORE] ||
-                    'book-open'
-                  }
-                  className="w-3 h-3"
-                />
-                <span>{linked.name || 'Unnamed'}</span>
-              </div>
-            ))
+            <div className="flex flex-wrap gap-2 items-start">
+              {linkedEntries.map((linked) => (
+                <div
+                  key={linked.id}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-crimson-300 bg-crimson-900/50 border border-crimson-700/50 rounded-full"
+                >
+                  <Icon
+                    name={
+                      categoryIcons[linked.category || WorldEntryCategory.LORE] ||
+                      'book-open'
+                    }
+                    className="w-3 h-3"
+                  />
+                  <span>{linked.name || 'Unnamed'}</span>
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-xs text-slate-500 italic px-1">
               No keywords from other entries found in this content.
@@ -992,9 +994,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
             onSubmit={handleSubmit}
             className="flex-1 flex flex-col overflow-hidden relative"
           >
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden min-h-0">
               {/* Left Column: Navigation & Entry List */}
-              <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50">
+              <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50 min-h-0">
                 <div className="p-4 border-b border-slate-800 shrink-0 space-y-4">
                     <div className="flex items-start gap-4">
                         <div className="relative group shrink-0">
@@ -1057,10 +1059,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                   </button>
                 </div>
                 
-                <div ref={entryListRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar p-2 relative">
+                <div ref={entryListRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar p-2 relative min-h-0">
                     {displayList.length > 0 ? (
-                        <>
-                            <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }} />
+                        <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }}>
                             {virtualItems.map(({ data: item, style }) => (
                                 <div key={item.type === 'entry' ? item.data.id : item.id} style={style}>
                                     {item.type === 'header' ? (
@@ -1075,7 +1076,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                                     )}
                                 </div>
                             ))}
-                        </>
+                        </div>
                     ) : (
                          <div className="text-center text-slate-600 p-8">
                             <Icon name={entrySearch ? "search" : "book-open"} className="w-12 h-12 mx-auto" />
@@ -1086,7 +1087,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
               </aside>
 
               {/* Center Column: Editor */}
-              <main className="w-full flex flex-col">
+              <main className="w-full flex flex-col min-h-0">
                 {activeEntry ? (
                   <>
                     <div className="p-4 border-b border-slate-800 shrink-0 flex items-center gap-2">
@@ -1128,7 +1129,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
               </main>
 
               {/* Right Column: Inspector */}
-              <aside className="w-full border-l border-slate-800 overflow-y-auto p-4 custom-scrollbar bg-slate-900/50">
+              <aside className="w-full border-l border-slate-800 overflow-y-auto p-4 custom-scrollbar bg-slate-900/50 min-h-0">
                 {activeEntry ? (
                   <EntryInspectorPanel
                     entry={activeEntry}

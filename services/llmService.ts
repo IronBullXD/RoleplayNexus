@@ -39,7 +39,6 @@ export function isApiError(error: unknown): error is ApiError {
 const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Enhanced World Index Caching ---
-const MAX_CACHE_SIZE = 100; // Increased size for more efficient cache
 interface WorldCacheEntry {
   index: any;
   version: string;
@@ -53,34 +52,28 @@ const worldIndexCache = new Map<string, WorldCacheEntry>();
  * Cleans the cache using a score-based eviction policy (considering age and frequency)
  * when it exceeds the maximum size.
  */
-function cleanupCache(): void {
-  while (worldIndexCache.size > MAX_CACHE_SIZE) {
-    let worstEntryKey: string | null = null;
-    let maxScore = -Infinity;
+function cleanupCache() {
+  const now = Date.now();
+  const MAX_AGE = 30 * 60 * 1000; // 30 minutes
+  const MAX_ENTRIES = 50; // Maximum cache entries
 
-    // Scoring system: higher score = better candidate for eviction.
-    // Score penalizes old, infrequently used items.
-    const now = Date.now();
-    for (const [key, entry] of worldIndexCache.entries()) {
-      const ageInHours = (now - entry.lastAccessed) / (1000 * 60 * 60);
-      const score = ageInHours / entry.frequency;
-      if (score > maxScore) {
-        maxScore = score;
-        worstEntryKey = key;
-      }
+  const entries = Array.from(worldIndexCache.entries());
+  
+  // Remove old entries
+  for (const [key, value] of entries) {
+    if (now - value.lastAccessed > MAX_AGE) {
+      worldIndexCache.delete(key);
     }
+  }
 
-    if (worstEntryKey) {
-      worldIndexCache.delete(worstEntryKey);
-      logger.log(`Cache eviction: Removed entry for world ID ${worstEntryKey}`, {
-        score: maxScore.toFixed(2),
-        newSize: worldIndexCache.size,
-      });
-    } else {
-      // Fallback: remove the first item if scoring fails
-      const oldestKey = worldIndexCache.keys().next().value;
-      if (oldestKey) worldIndexCache.delete(oldestKey);
-      else break; // Cache is empty
+  // If still too many entries, remove least recently used
+  if (worldIndexCache.size > MAX_ENTRIES) {
+    const sortedEntries = Array.from(worldIndexCache.entries())
+      .sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
+    
+    const toRemove = sortedEntries.slice(0, worldIndexCache.size - MAX_ENTRIES);
+    for (const [key] of toRemove) {
+      worldIndexCache.delete(key);
     }
   }
 }

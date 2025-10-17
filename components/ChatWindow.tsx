@@ -286,7 +286,8 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
-  const { activeCharacterId, activeSessionId, resetChatView, stopGeneration } = useUIStore();
+  // FIX: Moved `setActiveSessionId` from `useChatStore` to `useUIStore` where it is defined.
+  const { activeCharacterId, activeSessionId, resetChatView, stopGeneration, setActiveSessionId } = useUIStore();
   const { isLoading, error } = useUIStore(state => ({ isLoading: state.isLoading, error: state.error }));
   
   const characters = useCharacterStore(state => state.characters);
@@ -295,7 +296,6 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     sessions, 
     messages: allMessages, 
     newSession, 
-    setActiveSessionId, 
     setSessionWorld, 
     setSessionTemperature, 
     setSessionContextSize, 

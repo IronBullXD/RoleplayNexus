@@ -4,13 +4,36 @@ import { ERROR_MESSAGES } from './errorMessages';
 
 const MIN_CONTENT_LENGTH = 50; // characters
 
+function isValidWorldEntry(entry: any): entry is WorldEntry {
+  return (
+    entry &&
+    typeof entry === 'object' &&
+    typeof entry.id === 'string' &&
+    (typeof entry.name === 'string' || typeof entry.name === 'undefined') &&
+    Array.isArray(entry.keys) &&
+    typeof entry.content === 'string' &&
+    typeof entry.enabled === 'boolean'
+  );
+}
+
 export function validateWorld(world: World): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  if (!world.entries || world.entries.length === 0) {
+  if (!world.entries || !Array.isArray(world.entries) || world.entries.length === 0) {
     return [];
   }
 
-  const entries = world.entries;
+  // Filter out invalid entries
+  const validEntries = world.entries.filter(isValidWorldEntry);
+  if (validEntries.length !== world.entries.length) {
+    issues.push({
+      type: 'InvalidEntry',
+      severity: 'error',
+      message: `Found ${world.entries.length - validEntries.length} invalid entries that will be ignored.`,
+      entryIds: []
+    });
+  }
+
+  const entries = validEntries;
   const entryMap = new Map<string, WorldEntry>(entries.map(e => [e.id, e]));
 
   // --- Check 1: Duplicate Keywords ---

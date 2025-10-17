@@ -23,6 +23,8 @@ const issueMetadata: Record<ValidationType, { icon: string; color: string; title
   InconsistentFormatting: { icon: 'lightbulb', color: 'text-sky-400', title: 'Inconsistent Formatting' },
   MissingKeywords: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Potentially Missing Keywords' },
   DuplicateContent: { icon: 'alert-triangle', color: 'text-ember-400', title: 'Duplicate Content' },
+  // FIX: Added missing `InvalidEntry` to satisfy the `ValidationType` record.
+  InvalidEntry: { icon: 'bug', color: 'text-red-400', title: 'Invalid Entry Data' },
 };
 
 const ValidationResultsPanel: React.FC<ValidationResultsPanelProps> = ({ issues, onClose, onSelectEntry, worldName, entries }) => {

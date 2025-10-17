@@ -161,7 +161,8 @@ export type ValidationType =
   | 'OrphanedEntry'
   | 'InconsistentFormatting'
   | 'MissingKeywords'
-  | 'DuplicateContent';
+  | 'DuplicateContent'
+  | 'InvalidEntry';
 
 export interface ValidationIssue {
   type: ValidationType;

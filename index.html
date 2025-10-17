@@ -109,12 +109,17 @@
         color: rgb(var(--color-slate-100));
       }
       /* Custom scrollbar to match gaming theme */
+      .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(var(--color-slate-700)) rgb(var(--color-slate-900));
+      }
       .custom-scrollbar::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
         background: rgb(var(--color-slate-900));
+        border-radius: 4px;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
         background-color: rgb(var(--color-slate-700));
@@ -123,6 +128,15 @@
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background-color: rgb(var(--color-slate-600));
+      }
+
+      /* Ensure scrollbars are always visible when content overflows */
+      .overflow-y-auto {
+        scrollbar-gutter: stable;
+      }
+      /* Fix for flex containers with overflow */
+      .flex-1.overflow-y-auto {
+        min-height: 0;
       }
 
       /* Card glow effect */
