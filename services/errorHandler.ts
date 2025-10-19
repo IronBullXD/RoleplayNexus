@@ -28,7 +28,11 @@ export function isApiError(error: unknown): error is { message: string, status: 
  * @returns An ApiError instance.
  */
 export function handleApiError(error: unknown, provider: LLMProvider): ApiError {
-  logger.error(`${provider} API call failed`, { error });
+  // Correctly serialize the error for logging before processing it.
+  const serializableError = error instanceof Error
+    ? { name: error.name, message: error.message, stack: error.stack, ...error }
+    : error;
+  logger.error(`${provider} API call failed`, { error: serializableError });
 
   if (isApiError(error)) {
     const status = error.status;

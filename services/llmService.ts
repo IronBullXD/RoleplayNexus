@@ -455,8 +455,15 @@ CRITICAL: Your entire response MUST be a single, valid JSON object matching the 
         },
       });
 
-      const jsonStr = response.text.trim();
-      const report = JSON.parse(jsonStr) as AiAnalysisReport;
+      const jsonStr = response.text;
+      if (!jsonStr || jsonStr.trim() === '') {
+        logger.error('AI world analysis received empty response text.', { response });
+        if (response.promptFeedback?.blockReason) {
+            throw new Error(`AI response blocked. Reason: ${response.promptFeedback.blockReason}.`);
+        }
+        throw new Error('Received an empty response from the AI for world analysis.');
+      }
+      const report = JSON.parse(jsonStr.trim()) as AiAnalysisReport;
       logger.apiResponse('AI world analysis successful', { response: report });
       return report;
     } else {
@@ -536,9 +543,17 @@ Instructions:
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: { systemInstruction: systemPrompt },
       });
-      const summary = response.text.trim();
+      const summary = response.text;
+      if (!summary) {
+        // FIX: Changed logger.warn to logger.log as 'warn' does not exist.
+        logger.log('Summarization returned an empty response.', { response });
+        if (response.promptFeedback?.blockReason) {
+            throw new Error(`AI response blocked during summarization. Reason: ${response.promptFeedback.blockReason}.`);
+        }
+        return ''; // An empty summary is a valid result
+      }
       logger.apiResponse('Summarization successful', { summary });
-      return summary;
+      return summary.trim();
     } else {
       const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
       if (!endpoint)
@@ -658,8 +673,15 @@ Respond ONLY with a valid JSON object matching the provided schema.
         },
       });
 
-      const jsonStr = response.text.trim();
-      const profile = JSON.parse(jsonStr) as GeneratedCharacterProfile;
+      const jsonStr = response.text;
+      if (!jsonStr || jsonStr.trim() === '') {
+        logger.error('Character profile generation received empty response text.', { response });
+         if (response.promptFeedback?.blockReason) {
+            throw new Error(`AI response blocked. Reason: ${response.promptFeedback.blockReason}.`);
+        }
+        throw new Error('Received an empty response from the AI for character generation.');
+      }
+      const profile = JSON.parse(jsonStr.trim()) as GeneratedCharacterProfile;
       logger.apiResponse('Character profile generated successfully', {
         response: profile,
       });
@@ -1246,8 +1268,15 @@ export async function getGroupChatCompletion(
           },
         },
       });
-      const jsonStr = response.text.trim();
-      return JSON.parse(jsonStr) as GroupTurnAction[];
+      const jsonStr = response.text;
+      if (!jsonStr || jsonStr.trim() === '') {
+        logger.error('Group chat completion received empty response text.', { response });
+         if (response.promptFeedback?.blockReason) {
+            throw new Error(`AI response blocked. Reason: ${response.promptFeedback.blockReason}.`);
+        }
+        throw new Error('Received an empty response from the AI for group chat turn.');
+      }
+      return JSON.parse(jsonStr.trim()) as GroupTurnAction[];
     } else {
       const openAIPrompt = `${finalSystemPrompt}\n\n### RESPONSE FORMAT ###\nYOUR RESPONSE MUST BE A VALID JSON OBJECT with a single key "turn".
 The value of "turn" must be an array of action objects.

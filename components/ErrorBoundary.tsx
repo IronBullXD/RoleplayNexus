@@ -10,7 +10,6 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  // FIX: Use class properties for state and arrow functions for methods to ensure correct `this` binding.
   state: State = {
     hasError: false,
     error: undefined,
@@ -20,6 +19,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     return { hasError: true, error };
   }
 
+  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error('Uncaught UI Error', {
       error: {
@@ -41,6 +41,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     window.location.reload();
   };
 
+  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

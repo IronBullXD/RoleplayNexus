@@ -11,6 +11,7 @@ interface ChatInputProps {
     characterName: string;
     canSubmit: boolean;
     canContinue: boolean;
+    canRegenerate: boolean;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -23,6 +24,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     characterName,
     canSubmit,
     canContinue,
+    canRegenerate,
 }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -54,6 +56,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
         },
         [handleAction],
     );
+
+    const buttonLabel = canSubmit
+      ? 'Send message'
+      : canContinue
+      ? 'Continue generation'
+      : canRegenerate
+      ? 'Regenerate response'
+      : 'Send message';
+      
+    const buttonIcon = canSubmit
+      ? 'send'
+      : canContinue
+      ? 'ellipsis-horizontal'
+      : canRegenerate
+      ? 'redo'
+      : 'send';
+      
+    const canDoAction = canSubmit || canContinue || canRegenerate;
 
     return (
         <div className="px-3 pb-3 pt-2 mt-auto">
@@ -87,14 +107,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
                         ) : (
                             <button
                                 type="submit"
-                                disabled={!canSubmit && !canContinue}
+                                disabled={!canDoAction}
                                 className="w-10 h-10 flex items-center justify-center rounded-md bg-crimson-600 text-white disabled:bg-slate-700 disabled:cursor-not-allowed hover:bg-crimson-500 transition-colors shadow-lg shadow-crimson-900/50"
-                                aria-label={
-                                    canContinue ? 'Continue generation' : 'Send message'
-                                }
+                                aria-label={buttonLabel}
                             >
                                 <Icon
-                                    name={canContinue ? 'ellipsis-horizontal' : 'send'}
+                                    name={buttonIcon}
                                     className="w-5 h-5"
                                 />
                             </button>

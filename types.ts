@@ -49,6 +49,10 @@ export interface Message {
   characterId?: string; // For group chats
   isThinking?: boolean;
   thinkingProcess?: ThinkingStep[];
+  alternates?: {
+    ids: string[];
+    activeIndex: number;
+  };
 }
 
 export enum WorldEntryCategory {

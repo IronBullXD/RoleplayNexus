@@ -42,7 +42,17 @@ async function runThinkingStep<T>(
   });
 
   const response = await Promise.race([apiCall, timeoutPromise]);
-  return JSON.parse(response.text.trim()) as T;
+  
+  const text = response.text;
+  if (!text || text.trim() === '') {
+      logger.error('Thinking step received empty or invalid response from Gemini.', { response });
+      if (response.promptFeedback && response.promptFeedback.blockReason) {
+        throw new Error(`AI response blocked. Reason: ${response.promptFeedback.blockReason}.`);
+      }
+      throw new Error('Received an empty response from the AI during a thinking step.');
+  }
+
+  return JSON.parse(text.trim()) as T;
 }
 
 export async function* generateResponseWithThinking(

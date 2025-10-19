@@ -71,7 +71,18 @@ function formatRelativeTime(timestamp: number): string {
 
 function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
   // FIX: Moved `setActiveSessionId` from `useChatStore` to `useUIStore` where it is defined.
-  const { activeCharacterId, activeSessionId, resetChatView, stopGeneration, setActiveSessionId } = useUIStore();
+  const { 
+    activeCharacterId, 
+    activeSessionId, 
+    resetChatView, 
+    stopGeneration, 
+    setActiveSessionId,
+    isSelectionModeActive,
+    selectedMessageIds,
+    toggleSelectionMode,
+    toggleMessageSelection,
+    requestConfirmation,
+  } = useUIStore();
   const { isLoading, error } = useUIStore(state => ({ isLoading: state.isLoading, error: state.error }));
   
   const characters = useCharacterStore(state => state.characters);
@@ -90,7 +101,9 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     forkChat, 
     editMessage, 
     sendMessage, 
-    continueGeneration 
+    continueGeneration,
+    deleteMultipleMessages,
+    setActiveAlternate,
   } = useChatStore();
 
   const { userPersona, settings } = useSettingsStore();
@@ -168,15 +181,32 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     }
   }, [messages.length, isLoading]);
 
+  const lastMessage = messages.filter((m) => m.role !== 'system').pop();
+  const canSubmit = !!input.trim();
+  const canContinue = !isLoading && !canSubmit && lastMessage?.role === 'assistant';
+  const canRegenerate = !isLoading && !canSubmit && lastMessage?.role === 'user';
+  
   const handleAction = useCallback(() => {
     if (isLoading) return;
-    if (input.trim()) {
+    if (canSubmit) {
       sendMessage(input.trim());
       setInput('');
-    } else if (messages.length && activeSessionId) {
-      continueGeneration(activeSessionId);
+    } else if (canRegenerate) {
+      regenerateResponse(activeSessionId!);
+    } else if (canContinue) {
+      continueGeneration(activeSessionId!);
     }
-  }, [isLoading, input, messages, activeSessionId, sendMessage, continueGeneration]);
+  }, [
+    isLoading,
+    canSubmit,
+    canRegenerate,
+    canContinue,
+    activeSessionId,
+    input,
+    sendMessage,
+    regenerateResponse,
+    continueGeneration,
+  ]);
 
   const lastMessageTimestamp = useMemo(() => {
     const lastMsg = messages.filter((m) => m.role !== 'system').pop();
@@ -204,16 +234,31 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     if (activeSessionId) forkChat(activeSessionId, messageId);
   }, [activeSessionId, forkChat]);
 
+  const handleDeleteSelected = useCallback(() => {
+    if (activeSessionId && selectedMessageIds.length > 0) {
+        requestConfirmation(
+            () => {
+                deleteMultipleMessages(activeSessionId, selectedMessageIds);
+                toggleSelectionMode(); // Exits selection mode after deleting
+            },
+            'Delete Messages',
+            `Are you sure you want to delete ${selectedMessageIds.length} selected message(s)? This action cannot be undone.`,
+            'Delete',
+            'danger'
+        );
+    }
+  }, [activeSessionId, selectedMessageIds, requestConfirmation, deleteMultipleMessages, toggleSelectionMode]);
+
+  const handleNavigateAlternate = useCallback((messageId: string, direction: 'prev' | 'next') => {
+      if (activeSessionId) {
+          setActiveAlternate(activeSessionId, messageId, direction);
+      }
+  }, [activeSessionId, setActiveAlternate]);
+
   if (!character || !session) return null;
 
-  const lastMessage = messages[messages.length - 1];
   const isReceiving = isLoading && lastMessage?.role === 'assistant';
   const showTypingIndicator = isLoading && !isReceiving && !lastMessage?.isThinking;
-  const canSubmit = !!input.trim();
-  const canContinue =
-    !canSubmit &&
-    messages.length > 0 &&
-    lastMessage?.role === 'assistant';
 
   return (
     <div className="flex-1 flex flex-col bg-transparent h-screen">
@@ -255,6 +300,12 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
             icon="history"
             label="Chat History"
             onClick={() => onNavigateToHistory()}
+          />
+          <IconButton
+            icon="check-square"
+            label="Select Messages"
+            onClick={toggleSelectionMode}
+            className={isSelectionModeActive ? 'bg-crimson-600/50 text-white' : ''}
           />
           <ChatSettingsPopover
             settings={{
@@ -315,6 +366,10 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
                 onCancelEdit={cancelEdit}
                 world={msg.role === 'assistant' ? activeWorld : null}
                 showThinking={settings.showThinking}
+                isSelectionModeActive={isSelectionModeActive}
+                isSelected={selectedMessageIds.includes(msg.id)}
+                onToggleSelection={() => toggleMessageSelection(msg.id)}
+                onNavigateAlternate={(direction) => handleNavigateAlternate(msg.id, direction)}
               />
             </React.Fragment>
           ))}
@@ -323,17 +378,38 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
         </div>
       </div>
 
-      <ChatInput
-        input={input}
-        setInput={setInput}
-        handleAction={handleAction}
-        isLoading={isLoading}
-        error={error}
-        stopGeneration={stopGeneration}
-        characterName={character.name}
-        canSubmit={canSubmit}
-        canContinue={canContinue}
-      />
+      {isSelectionModeActive ? (
+        <div className="px-3 pb-3 pt-2 mt-auto">
+          <div className="max-w-4xl w-full mx-auto bg-slate-900/80 backdrop-blur-sm p-3 rounded-lg border border-slate-700/50 flex justify-between items-center">
+            <span className="font-semibold text-slate-300">{selectedMessageIds.length} message(s) selected</span>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleSelectionMode} className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 border border-slate-600 hover:bg-slate-700 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={selectedMessageIds.length === 0}
+                className="px-4 py-2 text-sm font-semibold text-white bg-ember-600 hover:bg-ember-500 rounded-lg transition-colors border border-ember-400/50 shadow-md shadow-ember-900/50 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed disabled:shadow-none disabled:border-slate-600"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          handleAction={handleAction}
+          isLoading={isLoading}
+          error={error}
+          stopGeneration={stopGeneration}
+          characterName={character.name}
+          canSubmit={canSubmit}
+          canContinue={canContinue}
+          canRegenerate={canRegenerate}
+        />
+      )}
     </div>
   );
 }

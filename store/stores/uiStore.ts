@@ -23,6 +23,8 @@ export interface UIState {
   activeSessionId: string | null;
   activeGroupSessionId: string | null;
   abortController: AbortController | null;
+  isSelectionModeActive: boolean;
+  selectedMessageIds: string[];
 }
 
 export interface UIActions {
@@ -45,6 +47,9 @@ export interface UIActions {
   setActiveGroupSessionId: (id: string | null) => void;
   setAbortController: (controller: AbortController | null) => void;
   setInitialized: (initialized: boolean) => void;
+  toggleSelectionMode: () => void;
+  toggleMessageSelection: (messageId: string) => void;
+  clearMessageSelection: () => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -63,6 +68,8 @@ export const useUIStore = create<UIStore>()(
       activeSessionId: null,
       activeGroupSessionId: null,
       abortController: null,
+      isSelectionModeActive: false,
+      selectedMessageIds: [],
 
       // --- Actions ---
       setInitialized: (initialized) => set({ isInitialized: initialized }),
@@ -78,6 +85,8 @@ export const useUIStore = create<UIStore>()(
           activeCharacterId: null,
           activeSessionId: null,
           activeGroupSessionId: null,
+          isSelectionModeActive: false,
+          selectedMessageIds: [],
         });
       },
 
@@ -123,6 +132,21 @@ export const useUIStore = create<UIStore>()(
       
       setError: (error: string | null) => set({ error }),
       setIsLoading: (isLoading: boolean) => set({ isLoading }),
+      
+      toggleSelectionMode: () => set(state => ({
+          isSelectionModeActive: !state.isSelectionModeActive,
+          selectedMessageIds: [], // Always clear selection when toggling mode
+      })),
+      toggleMessageSelection: (messageId) => set(state => {
+          const newSelection = new Set(state.selectedMessageIds);
+          if (newSelection.has(messageId)) {
+              newSelection.delete(messageId);
+          } else {
+              newSelection.add(messageId);
+          }
+          return { selectedMessageIds: Array.from(newSelection) };
+      }),
+      clearMessageSelection: () => set({ selectedMessageIds: [] }),
     }),
     {
       name: 'roleplay-nexus-ui',

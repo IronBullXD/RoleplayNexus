@@ -12,7 +12,6 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Use class properties for state and arrow functions for methods to ensure correct `this` binding.
   state: State = {
     hasError: false,
     error: undefined,
@@ -22,6 +21,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, error };
   }
 
+  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
@@ -35,10 +35,12 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
+  // FIX: The handler remains an arrow function to automatically bind `this`.
   handleRetry = (): void => {
     this.setState({ hasError: false, error: undefined });
   };
 
+  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

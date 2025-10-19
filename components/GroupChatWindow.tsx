@@ -56,6 +56,9 @@ interface EditableGroupChatMessageProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   world: World | null;
+  isSelectionModeActive: boolean;
+  isSelected: boolean;
+  onToggleSelection: () => void;
 }
 
 const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
@@ -74,6 +77,9 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
   onSaveEdit,
   onCancelEdit,
   world,
+  isSelectionModeActive,
+  isSelected,
+  onToggleSelection,
 }: EditableGroupChatMessageProps) {
   if (message.role === 'system') {
     return <SystemMessage message={message} />;
@@ -120,15 +126,30 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
 
   return (
     <div
-      className={`group flex items-start gap-3 my-5 animate-message-in ${
+      className={`group flex items-start gap-3 my-5 animate-message-in relative ${
         isUser ? 'flex-row-reverse' : ''
-      }`}
+      } ${isSelectionModeActive ? 'cursor-pointer' : ''}`}
+      onClick={isSelectionModeActive ? onToggleSelection : undefined}
     >
+      {/* Selection overlay */}
+      {isSelected && (
+        <div className="absolute inset-y-0 -left-4 -right-4 bg-crimson-900/20 border-y border-crimson-800 pointer-events-none rounded-lg z-0"></div>
+      )}
+
+      {/* Checkbox */}
+      {isSelectionModeActive && (
+        <div className="relative z-10 flex-shrink-0 self-center">
+            <div className={`w-5 h-5 border-2 rounded-md flex items-center justify-center transition-colors ${isSelected ? 'bg-crimson-500 border-crimson-400' : 'bg-slate-800 border-slate-600'}`}>
+                {isSelected && <Icon name="checkmark" className="w-4 h-4 text-white" />}
+            </div>
+        </div>
+      )}
+
       <Avatar
         src={avatar}
         alt={name || 'User'}
         shape="square"
-        className="w-10 h-10 mt-1"
+        className="w-10 h-10 mt-1 relative z-10"
       />
       <div
         className={`flex-1 min-w-0 flex flex-col ${
@@ -141,13 +162,13 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
           </p>
         )}
         <div
-          className={`p-4 rounded-2xl max-w-2xl lg:max-w-3xl relative ${
+          className={`p-4 rounded-2xl max-w-2xl lg:max-w-3xl relative z-10 ${
             isUser
               ? 'bg-slate-700 text-white rounded-tr-lg chat-bubble-right'
               : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
           }`}
         >
-          {!isEditing && (
+          {!isEditing && !isSelectionModeActive && (
             <div
               className={`absolute flex items-center gap-0.5 p-1 bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
                 isUser ? 'left-4 -top-4' : 'right-4 -top-4'
@@ -270,7 +291,18 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
-  const { activeGroupSessionId, isLoading, error, setCurrentView, stopGeneration } = useUIStore();
+  const { 
+    activeGroupSessionId, 
+    isLoading, 
+    error, 
+    setCurrentView, 
+    stopGeneration,
+    isSelectionModeActive,
+    selectedMessageIds,
+    toggleSelectionMode,
+    toggleMessageSelection,
+    requestConfirmation,
+  } = useUIStore();
   const { 
     groupSessions,
     messages: allMessages,
@@ -281,6 +313,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     setSessionMemoryEnabled,
     editGroupMessage,
     deleteGroupMessage,
+    deleteMultipleGroupMessages,
     regenerateGroupResponse,
     forkGroupChat,
     sendGroupMessage,
@@ -369,15 +402,31 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     }
   }, [input]);
 
+  const lastMessage = messages.filter((m) => m.role !== 'system').pop();
+  const canSubmit = !!input.trim();
+  const canContinue = !isLoading && !canSubmit && lastMessage?.role === 'assistant';
+  const canRegenerate = !isLoading && !canSubmit && lastMessage?.role === 'user';
+  
   const handleAction = useCallback(() => {
     if (isLoading) return;
-    if (input.trim()) {
+    if (canSubmit) {
       sendGroupMessage(input.trim());
       setInput('');
-    } else if (messages.length > 0 && activeGroupSessionId) {
+    } else if (canRegenerate) {
+      regenerateGroupResponse();
+    } else if (canContinue) {
       continueGroupGeneration();
     }
-  }, [isLoading, input, messages, activeGroupSessionId, sendGroupMessage, continueGroupGeneration]);
+  }, [
+    isLoading,
+    canSubmit,
+    canRegenerate,
+    canContinue,
+    input,
+    sendGroupMessage,
+    regenerateGroupResponse,
+    continueGroupGeneration,
+  ]);
 
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -401,6 +450,22 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     const lastMsg = messages.filter((m) => m.role !== 'system').pop();
     return lastMsg?.timestamp;
   }, [messages]);
+  
+  const handleDeleteSelected = useCallback(() => {
+    if (activeGroupSessionId && selectedMessageIds.length > 0) {
+        requestConfirmation(
+            () => {
+                deleteMultipleGroupMessages(activeGroupSessionId, selectedMessageIds);
+                toggleSelectionMode();
+            },
+            'Delete Messages',
+            `Are you sure you want to delete ${selectedMessageIds.length} selected message(s)? This action cannot be undone.`,
+            'Delete',
+            'danger'
+        );
+    }
+  }, [activeGroupSessionId, selectedMessageIds, requestConfirmation, deleteMultipleGroupMessages, toggleSelectionMode]);
+
 
   if (!session) return null;
 
@@ -408,11 +473,26 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     session.characterIds.includes(c.id),
   );
   const avatarSlice = sessionCharacters.slice(0, 3);
-  const lastMessage = messages[messages.length - 1];
   const isReceiving = isLoading && lastMessage?.role === 'assistant';
   const showTypingIndicator = isLoading && !isReceiving;
-  const canSubmit = !!input.trim();
-  const canContinue = !canSubmit && messages.length > 0;
+
+  const buttonLabel = canSubmit
+    ? 'Send message'
+    : canContinue
+    ? 'Continue generation'
+    : canRegenerate
+    ? 'Regenerate response'
+    : 'Send message';
+
+  const buttonIcon = canSubmit
+    ? 'send'
+    : canContinue
+    ? 'ellipsis-horizontal'
+    : canRegenerate
+    ? 'redo'
+    : 'send';
+
+  const canDoAction = canSubmit || canContinue || canRegenerate;
 
   return (
     <div className="flex-1 flex flex-col bg-transparent h-screen">
@@ -458,6 +538,12 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
             icon="history"
             label="Chat History"
             onClick={() => onNavigateToHistory()}
+          />
+          <IconButton
+            icon="check-square"
+            label="Select Messages"
+            onClick={toggleSelectionMode}
+            className={isSelectionModeActive ? 'bg-crimson-600/50 text-white' : ''}
           />
           <ChatSettingsPopover
             settings={{
@@ -531,6 +617,9 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 world={msg.role === 'assistant' ? activeWorld : null}
+                isSelectionModeActive={isSelectionModeActive}
+                isSelected={selectedMessageIds.includes(msg.id)}
+                onToggleSelection={() => toggleMessageSelection(msg.id)}
               />
             </React.Fragment>
           ))}
@@ -539,53 +628,68 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
         </div>
       </div>
 
-      <div className="px-3 pb-3 pt-2 mt-auto">
-        <div className="max-w-4xl w-full mx-auto">
-          {error && (
-            <p className="text-red-400 text-sm mb-2 text-center bg-red-900/50 border border-red-500/50 p-2 rounded-md">
-              {error}
-            </p>
-          )}
-          <form onSubmit={handleFormSubmit} className="relative w-full">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Send a message to the group..."
-              className="w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-4 pr-20 resize-none outline-none text-base text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-crimson-500 focus:border-crimson-500 transition-all duration-200 custom-scrollbar min-h-[3.5rem]"
-              rows={1}
-              disabled={isLoading}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {isLoading ? (
-                <button
-                  type="button"
-                  onClick={() => stopGeneration()}
-                  className="w-10 h-10 flex items-center justify-center rounded-md bg-ember-600 text-white hover:bg-ember-500 transition-colors shadow-lg"
-                  aria-label="Stop generation"
-                >
-                  <Icon name="stop" className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!canSubmit && !canContinue}
-                  className="w-10 h-10 flex items-center justify-center rounded-md bg-crimson-600 text-white disabled:bg-slate-700 disabled:cursor-not-allowed hover:bg-crimson-500 transition-colors shadow-lg shadow-crimson-900/50"
-                  aria-label={
-                    canContinue ? 'Continue generation' : 'Send message'
-                  }
-                >
-                  <Icon
-                    name={canContinue ? 'ellipsis-horizontal' : 'send'}
-                    className="w-5 h-5"
-                  />
-                </button>
-              )}
+      {isSelectionModeActive ? (
+        <div className="px-3 pb-3 pt-2 mt-auto">
+          <div className="max-w-4xl w-full mx-auto bg-slate-900/80 backdrop-blur-sm p-3 rounded-lg border border-slate-700/50 flex justify-between items-center">
+            <span className="font-semibold text-slate-300">{selectedMessageIds.length} message(s) selected</span>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleSelectionMode} className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 border border-slate-600 hover:bg-slate-700 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={selectedMessageIds.length === 0}
+                className="px-4 py-2 text-sm font-semibold text-white bg-ember-600 hover:bg-ember-500 rounded-lg transition-colors border border-ember-400/50 shadow-md shadow-ember-900/50 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed disabled:shadow-none disabled:border-slate-600"
+              >
+                Delete Selected
+              </button>
             </div>
-          </form>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="px-3 pb-3 pt-2 mt-auto">
+          <div className="max-w-4xl w-full mx-auto">
+            {error && (
+              <p className="text-red-400 text-sm mb-2 text-center bg-red-900/50 border border-red-500/50 p-2 rounded-md">
+                {error}
+              </p>
+            )}
+            <form onSubmit={handleFormSubmit} className="relative w-full">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Send a message to the group..."
+                className="w-full bg-slate-950 border-2 border-slate-700 rounded-lg p-4 pr-20 resize-none outline-none text-base text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-crimson-500 focus:border-crimson-500 transition-all duration-200 custom-scrollbar min-h-[3.5rem]"
+                rows={1}
+                disabled={isLoading}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {isLoading ? (
+                  <button
+                    type="button"
+                    onClick={() => stopGeneration()}
+                    className="w-10 h-10 flex items-center justify-center rounded-md bg-ember-600 text-white hover:bg-ember-500 transition-colors shadow-lg"
+                    aria-label="Stop generation"
+                  >
+                    <Icon name="stop" className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!canDoAction}
+                    className="w-10 h-10 flex items-center justify-center rounded-md bg-crimson-600 text-white disabled:bg-slate-700 disabled:cursor-not-allowed hover:bg-crimson-500 transition-colors shadow-lg shadow-crimson-900/50"
+                    aria-label={buttonLabel}
+                  >
+                    <Icon name={buttonIcon} className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
