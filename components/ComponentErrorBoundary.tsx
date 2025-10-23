@@ -23,6 +23,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
 
   // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    // FIX: Access props via `this.props` in a class component.
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
       {
@@ -37,6 +38,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
 
   // FIX: The handler remains an arrow function to automatically bind `this`.
   handleRetry = (): void => {
+    // FIX: Access setState via `this.setState` in a class component.
     this.setState({ hasError: false, error: undefined });
   };
 
@@ -49,6 +51,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
             <Icon name="alert-triangle" className="w-6 h-6 shrink-0" />
             <div className="flex-1">
               <h3 className="font-bold">
+                {/* FIX: Access props via `this.props` in a class component. */}
                 Error in {this.props.componentName || 'this component'}
               </h3>
               <p className="text-xs mt-1 font-mono">
@@ -66,6 +69,7 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // FIX: Access props via `this.props` in a class component.
     return this.props.children;
   }
 }

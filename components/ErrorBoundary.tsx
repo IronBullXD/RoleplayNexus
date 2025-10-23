@@ -90,6 +90,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       );
     }
 
+    // FIX: Access `this.props.children` instead of `props.children` in a class component.
     return this.props.children;
   }
 }
