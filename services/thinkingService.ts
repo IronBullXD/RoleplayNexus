@@ -144,8 +144,6 @@ export async function* generateResponseWithThinking(
     logger.error('Thinking process failed.', { error });
     useUIStore.getState().setError(`Thinking process failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     
-    yield { type: 'start_response', payload: '' };
-    
     yield* fallback();
   }
 }

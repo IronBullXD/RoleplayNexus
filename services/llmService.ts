@@ -358,7 +358,6 @@ export interface CompletionParams {
   characterName?: string; // For single chat
   activeCharacterNames?: string[]; // For group chat
   interactionData?: Record<string, { viewCount: number; lastViewed: number }>;
-  // FIX: Add settings to CompletionParams to make it available for the thinking service.
   settings: Settings;
 }
 
@@ -559,7 +558,6 @@ Instructions:
       });
       const summary = response.text;
       if (!summary) {
-        // FIX: Changed logger.warn to logger.log as 'warn' does not exist.
         logger.log('Summarization returned an empty response.', { response });
         if (response.promptFeedback?.blockReason) {
             throw new Error(`AI response blocked during summarization. Reason: ${response.promptFeedback.blockReason}.`);

@@ -70,7 +70,6 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
-  // FIX: Moved `setActiveSessionId` from `useChatStore` to `useUIStore` where it is defined.
   const { 
     activeCharacterId, 
     activeSessionId, 

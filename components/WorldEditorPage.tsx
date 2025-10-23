@@ -184,8 +184,6 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       .filter((k) => !lowercasedCurrentKeys.includes(k.toLowerCase()));
 
     if (newKeys.length > 0) {
-      // FIX: Changed `...Array.from(new Set(newKeys))` to `...newKeys` to avoid TypeScript type inference issues.
-      // `newKeys` is already filtered for uniqueness against existing keys.
       onEntryChange(entry.id, 'keys', [...currentKeys, ...newKeys]);
     }
     inputElement.value = '';
@@ -227,8 +225,6 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       .filter((k) => !lowercasedCurrentKeys.includes(k.toLowerCase()));
 
     if (pastedKeys.length > 0) {
-      // FIX: Changed `...Array.from(new Set(pastedKeys))` to `...pastedKeys` to avoid TypeScript type inference issues.
-      // `pastedKeys` is already filtered for uniqueness against existing keys.
       onEntryChange(entry.id, 'keys', [...currentKeys, ...pastedKeys]);
     }
     if (keyInputRef.current) {
@@ -373,7 +369,7 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
                   name="alert-triangle"
                   className="inline w-3.5 h-3.5 mr-1 align-text-bottom"
                 />
-                Warning: "<strong>{dup.keyword}</strong>" also in:{' '}
+                Warning: <strong>{dup.keyword}</strong> also in{' '}
                 {dup.entries.join(', ')}.
               </p>
             ))}

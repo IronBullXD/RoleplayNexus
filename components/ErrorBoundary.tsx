@@ -10,7 +10,8 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  state: State = {
+  // FIX: Switched to a state class property initializer for correct typing.
+  public state: State = {
     hasError: false,
     error: undefined,
   };
@@ -88,7 +89,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
       );
     }
 
-    // FIX: Access `this.props.children` instead of `props.children` in a class component.
     return this.props.children;
   }
 }
