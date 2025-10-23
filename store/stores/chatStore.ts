@@ -5,7 +5,6 @@ import { useUIStore } from './uiStore';
 import { useSettingsStore } from './settingsStore';
 import { useWorldStore } from './worldStore';
 import { useCharacterStore } from './characterStore';
-// FIX: Removed 'isApiError' from this import as it's not exported from llmService and was unused in this file.
 import { getChatCompletionStream, getGroupChatCompletion, summarizeMessages } from '../../services/llmService';
 import { generateResponseWithThinking } from '../../services/thinkingService';
 import { logger } from '../../services/logger';
@@ -114,7 +113,14 @@ export const useChatStore = create<ChatStore>()(
         isContinuation: boolean = false,
         regenerationInfo?: { originalMessageId: string }
       ) => {
-        const { setIsLoading, setError, setAbortController } = useUIStore.getState();
+        const { setIsLoading, setError, setAbortController, isLoading } = useUIStore.getState();
+
+        // Check if already processing
+        if (isLoading) {
+          logger.log('Generation already in progress, skipping');
+          return;
+        }
+
         setIsLoading(true);
         setError(null);
         const controller = new AbortController();
@@ -254,7 +260,13 @@ export const useChatStore = create<ChatStore>()(
         sessionId: string,
         messagesToProcess: Message[],
       ) => {
-        const { setIsLoading, setError, setAbortController } = useUIStore.getState();
+        const { setIsLoading, setError, setAbortController, isLoading } = useUIStore.getState();
+
+        if (isLoading) {
+          logger.log('Group generation already in progress, skipping');
+          return;
+        }
+
         setIsLoading(true);
         setError(null);
         const controller = new AbortController();
@@ -362,14 +374,12 @@ export const useChatStore = create<ChatStore>()(
             };
 
             set((state: ChatStore) => {
-                // FIX: Cast characterSessions from persisted state to `Record<string, string[]>` to avoid type errors.
-                const charSessions = (state.characterSessions || {}) as Record<string, string[]>;
-                // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                const sessionsForChar = charSessions[characterId as string] || [];
-                const newCharSessions = {
+                const charSessions: Record<string, string[]> = state.characterSessions || {};
+                const sessionsForChar = charSessions[characterId] || [];
+                // FIX: Added explicit type annotation to resolve potential 'unknown' key type issue.
+                const newCharSessions: Record<string, string[]> = {
                     ...charSessions,
-                    // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                    [characterId as string]: [...sessionsForChar, newSessionData.id],
+                    [characterId]: [...sessionsForChar, newSessionData.id],
                 };
 
                 return {
@@ -541,15 +551,13 @@ export const useChatStore = create<ChatStore>()(
             };
             
             set((state: ChatStore) => {
-                // FIX: Cast characterSessions from persisted state to `Record<string, string[]>` to avoid type errors.
-                const charSessions = (state.characterSessions || {}) as Record<string, string[]>;
+                const charSessions: Record<string, string[]> = state.characterSessions || {};
                 const id = activeCharacterId!;
-                // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                const sessionsForChar = charSessions[id as string] || [];
-                const newCharSessions = {
+                const sessionsForChar = charSessions[id] || [];
+                // FIX: Added explicit type annotation to resolve potential 'unknown' key type issue.
+                const newCharSessions: Record<string, string[]> = {
                     ...charSessions,
-                    // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                    [id as string]: [...sessionsForChar, newSessionData.id],
+                    [id]: [...sessionsForChar, newSessionData.id],
                 };
                 return {
                     sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
@@ -571,12 +579,15 @@ export const useChatStore = create<ChatStore>()(
                 delete newSessions[sessionId];
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
-                // FIX: Cast characterSessions from persisted state to `Record<string, string[]>` to avoid type errors.
-                const newCharSessions = { ...((state.characterSessions || {}) as Record<string, string[]>) };
-                const id = characterId;
-                if (newCharSessions[id]) {
-                    newCharSessions[id] = (newCharSessions[id] || []).filter(sId => sId !== sessionId);
-                }
+                
+                const charSessions = state.characterSessions || {};
+                // FIX: Rewrote logic to use an immutable update pattern, which also resolves potential 'unknown' key type issues.
+                const updatedSessionsForChar = (charSessions[characterId] || []).filter(sId => sId !== sessionId);
+                // FIX: Added explicit type annotation to resolve potential 'unknown' key type issue.
+                const newCharSessions: Record<string, string[]> = {
+                    ...charSessions,
+                    [characterId]: updatedSessionsForChar,
+                };
 
                 return {
                     sessions: newSessions,
@@ -749,11 +760,8 @@ export const useChatStore = create<ChatStore>()(
         // --- Cross-slice utility actions ---
         deleteChatsForCharacter: (characterId: string) => {
             set((state: ChatStore) => {
-                // FIX: Cast characterSessions from persisted state to `Record<string, string[]>` to avoid type errors.
-                const charSessions = (state.characterSessions || {}) as Record<string, string[]>;
-                const id = characterId;
-                // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                const sessionsForChar = charSessions[id as string] || [];
+                const charSessions: Record<string, string[]> = state.characterSessions || {};
+                const sessionsForChar = charSessions[characterId] || [];
                 const sessionsToDelete = new Set(sessionsForChar);
                 const messagesToDelete = new Set<string>();
 
@@ -781,9 +789,8 @@ export const useChatStore = create<ChatStore>()(
                 const newMessages = { ...state.messages };
                 messagesToDelete.forEach(id => delete newMessages[id]);
                 
-                const newCharSessions = { ...charSessions };
-                // FIX: Cast key to string to satisfy TypeScript's index signature requirement.
-                delete newCharSessions[id as string];
+                // FIX: Rewrote logic to use immutable destructuring, which also resolves potential 'unknown' key type issues.
+                const { [characterId]: _deleted, ...newCharSessions } = charSessions;
 
                 return {
                     ...state,

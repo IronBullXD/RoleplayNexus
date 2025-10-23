@@ -28,10 +28,15 @@ class Logger {
   private addEntry(type: LogType, message: string, data?: unknown): void {
     // Keep logs from growing indefinitely
     if (this.logs.length > 500) {
-        this.logs.shift();
+      this.logs.shift();
     }
     this.logs.push({ timestamp: new Date(), type, message, data });
     this.notifyListeners();
+    
+    // Add cleanup for old logs
+    const now = Date.now();
+    const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+    this.logs = this.logs.filter(log => now - log.timestamp.getTime() < MAX_AGE);
   }
 
   public log(message: string, data?: unknown): void {

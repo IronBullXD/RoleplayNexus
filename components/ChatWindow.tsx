@@ -159,7 +159,9 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
 
   const messages = useMemo(() => {
     if (!session) return [];
-    return (session.messageIds || []).map(id => allMessages[id]).filter(Boolean);
+    return (session.messageIds || [])
+      .map(id => allMessages[id])
+      .filter((msg): msg is Message => !!(msg && msg.id));
   }, [session, allMessages]);
   
   const { displayedMessages, hasMore, loadMore } = usePaginatedMessages(

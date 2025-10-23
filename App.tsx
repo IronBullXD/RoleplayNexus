@@ -76,13 +76,11 @@ function App() {
       const RECENT_SESSION_LIMIT = 5;
 
       const allSessionsWithTimestamps = [
-        // FIX: Add explicit types for session objects to resolve 'unknown' type errors.
-        ...Object.values(sessions).map((s: Session) => ({
+        ...Object.values(sessions || {}).map((s: Session) => ({
           worldId: s.worldId,
           timestamp: s.messageIds.length > 0 ? messages[s.messageIds[s.messageIds.length - 1]]?.timestamp || 0 : 0,
         })),
-        // FIX: Add explicit types for session objects to resolve 'unknown' type errors.
-        ...Object.values(groupSessions).map((s: GroupSession) => ({
+        ...Object.values(groupSessions || {}).map((s: GroupSession) => ({
           worldId: s.worldId,
           timestamp: s.messageIds.length > 0 ? messages[s.messageIds[s.messageIds.length - 1]]?.timestamp || 0 : 0,
         }))

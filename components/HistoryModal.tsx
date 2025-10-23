@@ -98,8 +98,7 @@ function HistoryModal({ onClose }: HistoryModalProps) {
 
   const singleChatSessions = useMemo(
     () =>
-      // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
-      Object.entries(characterSessions as Record<string, string[]>)
+      Object.entries(characterSessions || {})
         .flatMap(([charId, sessionIds]: [string, string[]]) => {
             return sessionIds.map(sessionId => {
                 const session: Session | undefined = sessions[sessionId];
@@ -118,7 +117,7 @@ function HistoryModal({ onClose }: HistoryModalProps) {
 
   const groupChatSessions = useMemo(
     () =>
-      Object.values(groupSessions)
+      Object.values(groupSessions || {})
         .map((session: GroupSession) => {
             const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
             return {

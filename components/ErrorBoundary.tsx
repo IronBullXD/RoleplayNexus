@@ -19,7 +19,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     return { hasError: true, error };
   }
 
-  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error('Uncaught UI Error', {
       error: {
@@ -41,7 +40,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     window.location.reload();
   };
 
-  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

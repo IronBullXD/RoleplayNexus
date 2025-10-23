@@ -21,7 +21,6 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, error };
   }
 
-  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // FIX: Access props via `this.props` in a class component.
     logger.error(
@@ -36,13 +35,11 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  // FIX: The handler remains an arrow function to automatically bind `this`.
   handleRetry = (): void => {
     // FIX: Access setState via `this.setState` in a class component.
     this.setState({ hasError: false, error: undefined });
   };
 
-  // FIX: Converted to a standard class method. React binds `this` for lifecycle methods.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

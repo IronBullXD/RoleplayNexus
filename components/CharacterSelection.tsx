@@ -401,8 +401,7 @@ function CharacterSelection({
   }, []);
 
   const { recentSessions, totalRecentCount } = useMemo(() => {
-    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
-    const singleSessions = Object.entries(characterSessions as Record<string, string[]>).flatMap(
+    const singleSessions = Object.entries(characterSessions || {}).flatMap(
       ([charId, sessionIds]: [string, string[]]) => {
         const char = characters.find((c) => c.id === charId);
         return char
@@ -424,7 +423,7 @@ function CharacterSelection({
       },
     );
 
-    const groupSessionsMapped = Object.values(groupSessions).map(
+    const groupSessionsMapped = Object.values(groupSessions || {}).map(
       (s: GroupSession) => {
         const sessionChars = s.characterIds
           .map((id) => characters.find((c) => c.id === id))
@@ -462,8 +461,7 @@ function CharacterSelection({
 
   const lastPlayedTimestamps = useMemo(() => {
     const timestamps = new Map<string, number>();
-    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
-    Object.entries(characterSessions as Record<string, string[]>).forEach(
+    Object.entries(characterSessions || {}).forEach(
       ([charId, sessionIds]: [string, string[]]) => {
         let maxTimestamp = 0;
         sessionIds.forEach((sessionId) => {
@@ -485,8 +483,8 @@ function CharacterSelection({
   
   const messageCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    // FIX: Add explicit type assertion for `characterSessions` to resolve 'unknown' type error from persisted state.
-    Object.entries(characterSessions as Record<string, string[]>).forEach(([charId, sessionIds]) => {
+    // FIX: Add explicit type annotation to fix 'sessionIds' being 'unknown'.
+    Object.entries(characterSessions || {}).forEach(([charId, sessionIds]: [string, string[]]) => {
         let total = 0;
         sessionIds.forEach(sessionId => {
             const session = sessions[sessionId];

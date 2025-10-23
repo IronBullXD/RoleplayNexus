@@ -20,6 +20,24 @@ import { handleApiError } from './errorHandler';
 // Per guidelines, Gemini API key MUST come from the environment.
 const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+/**
+ * A helper function to standardize the handling of non-OK fetch responses.
+ * It checks the response and throws a structured error if it's not successful.
+ * @param response The fetch Response object.
+ * @returns The Response object if it's ok.
+ * @throws An error with a status property if the response is not ok.
+ */
+async function handleApiResponse(response: Response): Promise<Response> {
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => `(Could not read error body for status ${response.status})`);
+    const error = new Error(errorBody);
+    (error as any).status = response.status;
+    throw error;
+  }
+  return response;
+}
+
+
 // --- Enhanced World Index Caching ---
 interface WorldCacheEntry {
   index: any;
@@ -482,12 +500,8 @@ CRITICAL: Your entire response MUST be a single, valid JSON object matching the 
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
             body: JSON.stringify(body)
-        });
+        }).then(handleApiResponse);
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(errorBody);
-        }
         const data = await response.json();
         const content = data.choices[0]?.message?.content;
         if (!content) throw new Error('Invalid response format from API.');
@@ -575,14 +589,7 @@ Instructions:
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        const error = new Error(errorBody);
-        (error as any).status = response.status;
-        throw error;
-      }
+      }).then(handleApiResponse);
 
       const data = await response.json();
       const summary = data.choices[0]?.message?.content?.trim();
@@ -707,14 +714,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        const error = new Error(errorBody);
-        (error as any).status = response.status;
-        throw error;
-      }
+      }).then(handleApiResponse);
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
@@ -1310,14 +1310,8 @@ Based on the conversation history, generate the next turn in the scene.`;
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-      });
+      }).then(handleApiResponse);
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        const error = new Error(errorBody);
-        (error as any).status = response.status;
-        throw error;
-      }
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
       if (!content) throw new Error('Invalid response format from API.');

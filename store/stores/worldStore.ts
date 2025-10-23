@@ -43,6 +43,18 @@ export const useWorldStore = create<WorldStore>()(
           console.error('Invalid world: entries must be an array');
           return;
         }
+        
+        // Validate entries
+        for (const entry of world.entries) {
+          if (!entry.id || typeof entry.id !== 'string') {
+            console.error('Invalid world entry: missing or invalid id');
+            return;
+          }
+          if (!entry.content || typeof entry.content !== 'string') {
+            console.error('Invalid world entry: missing or invalid content');
+            return;
+          }
+        }
 
         set((state) => {
           const now = Date.now();
