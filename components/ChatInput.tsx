@@ -79,7 +79,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         <div className="px-3 pb-3 pt-2 mt-auto">
             <div className="max-w-4xl w-full mx-auto">
                 {error && (
-                    <p className="text-red-400 text-sm mb-2 text-center bg-red-900/50 border border-red-500/50 p-2 rounded-md">
+                    <p className="text-crimson-400 text-sm mb-2 text-center bg-crimson-900/50 border border-crimson-500/50 p-2 rounded-md">
                         {error}
                     </p>
                 )}

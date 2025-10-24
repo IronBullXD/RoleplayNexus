@@ -158,7 +158,7 @@ const ChatMessage = React.memo(function ChatMessage({
               isUser
                 ? 'bg-slate-700 text-slate-100 rounded-tr-lg chat-bubble-right'
                 : isError
-                ? 'bg-red-500/20 text-red-300 rounded-tl-lg'
+                ? 'bg-crimson-900/50 text-crimson-300 rounded-tl-lg'
                 : 'bg-slate-800 text-slate-200 rounded-tl-lg chat-bubble-left'
             }`}
           >
@@ -181,7 +181,7 @@ const ChatMessage = React.memo(function ChatMessage({
                 <div className="grid">
                   <div
                     aria-hidden="true"
-                    className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-relaxed"
+                    className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-loose"
                   >
                     {editingText || ' '}
                     {'\u00A0'}
@@ -191,7 +191,7 @@ const ChatMessage = React.memo(function ChatMessage({
                     value={editingText}
                     onChange={(e) => onSetEditingText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-relaxed ${
+                    className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-loose ${
                       isUser ? 'text-slate-100' : 'text-slate-200'
                     }`}
                     rows={1}
@@ -237,7 +237,7 @@ const ChatMessage = React.memo(function ChatMessage({
                   </div>
               )
             ) : (
-              <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
+              <div className="text-base whitespace-pre-wrap leading-loose break-words">
                 <SimpleMarkdown text={message.content} world={world} />
                 {isLastMessage && isLoading && message.role === 'assistant' && (
                   <span className="inline-block w-1 h-4 bg-slate-400 ml-1 animate-pulse" />

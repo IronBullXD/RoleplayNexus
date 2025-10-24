@@ -205,7 +205,7 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
               <div className="grid">
                 <div
                   aria-hidden="true"
-                  className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-relaxed"
+                  className="invisible whitespace-pre-wrap break-words col-start-1 row-start-1 text-base leading-loose"
                 >
                   {editingText || ' '}
                   {'\u00A0'}
@@ -215,7 +215,7 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
                   value={editingText}
                   onChange={(e) => onSetEditingText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-relaxed ${
+                  className={`col-start-1 row-start-1 text-base bg-transparent border-0 focus:ring-0 resize-none w-full outline-none p-0 m-0 leading-loose ${
                     isUser ? 'text-white' : 'text-slate-200'
                   }`}
                   rows={1}
@@ -252,7 +252,7 @@ const EditableGroupChatMessage = React.memo(function EditableGroupChatMessage({
               </div>
             </div>
           ) : (
-            <div className="text-base whitespace-pre-wrap leading-relaxed break-words">
+            <div className="text-base whitespace-pre-wrap leading-loose break-words">
               <SimpleMarkdown text={message.content} world={world} />
               {isLastMessage && isLoading && message.role === 'assistant' && (
                 <span className="inline-block w-1 h-4 bg-slate-400 ml-1 animate-pulse" />

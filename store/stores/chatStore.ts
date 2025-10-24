@@ -384,13 +384,16 @@ export const useChatStore = create<ChatStore>()(
                 const charSessions = state.characterSessions || {};
                 const sessionsForChar = charSessions[characterId] || [];
 
+                const newSessions = { ...state.sessions };
+                newSessions[newSessionData.id] = newSessionData;
+
+                const newCharSessions = { ...charSessions };
+                newCharSessions[characterId] = [...sessionsForChar, newSessionData.id];
+
                 return {
-                    sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
+                    sessions: newSessions,
                     messages: greetingMessage ? { ...state.messages, [greetingMessage.id]: greetingMessage } : state.messages,
-                    characterSessions: {
-                        ...charSessions,
-                        [characterId]: [...sessionsForChar, newSessionData.id],
-                    },
+                    characterSessions: newCharSessions,
                 };
             });
             
@@ -403,18 +406,20 @@ export const useChatStore = create<ChatStore>()(
         
           const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content, timestamp: Date.now() };
           
-          let session, currentMessages;
+          let session: Session | undefined, currentMessages: Message[] | undefined;
           set((state: ChatStore) => {
-            session = state.sessions[activeSessionId!];
+            session = state.sessions[activeSessionId!] as Session | undefined;
             if (!session) return state;
             const updatedMessages = { ...state.messages, [userMessage.id]: userMessage };
             currentMessages = [...session.messageIds, userMessage.id].map(id => updatedMessages[id]);
-            // FIX: Avoid computed property name in object literal to prevent type error.
-            const newSessions = { ...state.sessions };
-            newSessions[activeSessionId!] = { ...session, messageIds: [...session.messageIds, userMessage.id] };
+
+            // FIX: Use immutable update pattern to avoid potential type issues.
             return {
               messages: updatedMessages,
-              sessions: newSessions
+              sessions: {
+                ...state.sessions,
+                [activeSessionId!]: { ...session, messageIds: [...session.messageIds, userMessage.id] },
+              }
             };
           });
           
@@ -565,13 +570,13 @@ export const useChatStore = create<ChatStore>()(
             set((state: ChatStore) => {
                 const charSessions = state.characterSessions || {};
                 const id = activeCharacterId!;
-                const sessionsForChar = charSessions[id] || [];
+                // FIX: Cast charSessions[id] to string[] to avoid 'unknown' type issues on spread.
+                const sessionsForChar = (charSessions[id] as string[] | undefined) || [];
+                
+                // FIX: Use immutable update pattern to avoid potential type issues.
                 return {
                     sessions: { ...state.sessions, [newSessionData.id]: newSessionData },
-                    characterSessions: {
-                        ...charSessions,
-                        [id]: [...sessionsForChar, newSessionData.id],
-                    },
+                    characterSessions: { ...charSessions, [id]: [...sessionsForChar, newSessionData.id] },
                 };
             });
 
@@ -593,13 +598,13 @@ export const useChatStore = create<ChatStore>()(
                 const charSessions = state.characterSessions || {};
                 const updatedSessionsForChar = (charSessions[characterId] || []).filter(sId => sId !== sessionId);
 
+                const newCharSessions = { ...charSessions };
+                newCharSessions[characterId] = updatedSessionsForChar;
+
                 return {
                     sessions: newSessions,
                     messages: newMessages,
-                    characterSessions: {
-                        ...charSessions,
-                        [characterId]: updatedSessionsForChar,
-                    }
+                    characterSessions: newCharSessions,
                 };
             });
         },
@@ -630,34 +635,39 @@ export const useChatStore = create<ChatStore>()(
         sendGroupMessage: async (content: string) => {
           const { activeGroupSessionId } = useUIStore.getState();
           if (!activeGroupSessionId) return;
-      
+        
           const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content, timestamp: Date.now() };
           
-          let session, currentMessages;
+          let session: GroupSession | undefined, currentMessages: Message[] | undefined;
           set((state: ChatStore) => {
-              session = state.groupSessions[activeGroupSessionId!];
-              if (!session) return state;
-              const updatedMessages = { ...state.messages, [userMessage.id]: userMessage };
-              currentMessages = [...session.messageIds, userMessage.id].map(id => updatedMessages[id]);
-              return {
-                  messages: updatedMessages,
-                  groupSessions: { ...state.groupSessions, [activeGroupSessionId!]: { ...session, messageIds: [...session.messageIds, userMessage.id] } }
-              };
+            session = state.groupSessions[activeGroupSessionId!] as GroupSession | undefined;
+            if (!session) return state;
+            const updatedMessages = { ...state.messages, [userMessage.id]: userMessage };
+            currentMessages = [...session.messageIds, userMessage.id].map(id => updatedMessages[id]);
+            return {
+              messages: updatedMessages,
+              // FIX: The index key might be inferred as 'unknown'. Explicitly cast to string to be safe.
+              groupSessions: { ...state.groupSessions, [String(activeGroupSessionId!)]: { ...session, messageIds: [...session.messageIds, userMessage.id] } }
+            };
           });
           
-          if (!get().groupSessions[activeGroupSessionId]) return;
-      
-          const { messages: processedMessages, summary: newSummary } = await handleSummarization(get().groupSessions[activeGroupSessionId], currentMessages!);
-          if (newSummary !== get().groupSessions[activeGroupSessionId].memorySummary || processedMessages.length !== currentMessages!.length) {
-              set((state: ChatStore) => {
-                  const session = state.groupSessions[activeGroupSessionId!];
-                   if (!session) return state;
-                  return {
-                      groupSessions: { ...state.groupSessions, [activeGroupSessionId!]: { ...session, memorySummary: newSummary, messageIds: processedMessages.map(m => m.id) } }
-                  }
-              });
+          const currentSession = get().groupSessions[activeGroupSessionId];
+          if (!currentSession) {
+            logger.log('Group session was deleted during message processing');
+            return;
           }
-      
+        
+          const { messages: processedMessages, summary: newSummary } = await handleSummarization(currentSession, currentMessages!);
+          if (newSummary !== currentSession.memorySummary || processedMessages.length !== currentMessages!.length) {
+            set((state: ChatStore) => {
+              const session = state.groupSessions[activeGroupSessionId!];
+              if (!session) return state;
+              return {
+                groupSessions: { ...state.groupSessions, [activeGroupSessionId!]: { ...session, memorySummary: newSummary, messageIds: processedMessages.map(m => m.id) } }
+              }
+            });
+          }
+        
           await executeGroupChatGeneration(activeGroupSessionId, processedMessages);
         },
         editGroupMessage: (sessionId: string, messageId: string, newContent: string) => {
@@ -768,7 +778,8 @@ export const useChatStore = create<ChatStore>()(
         deleteChatsForCharacter: (characterId: string) => {
             set((state: ChatStore) => {
                 const charSessions = state.characterSessions || {};
-                const sessionsForChar = charSessions[characterId] || [];
+                // FIX: Cast value from record to avoid 'unknown' type, ensuring it's iterable.
+                const sessionsForChar = (charSessions[characterId] as string[] | undefined) || [];
                 const sessionsToDelete = new Set(sessionsForChar);
                 const messagesToDelete = new Set<string>();
 

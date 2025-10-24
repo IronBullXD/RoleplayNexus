@@ -137,6 +137,17 @@ const ViewAllHistoryCard = React.memo(({ onClick }: { onClick: () => void }) => 
 ViewAllHistoryCard.displayName = 'ViewAllHistoryCard';
 
 
+const getTagColorClass = (tags: string[] = []): string => {
+    const lowerTags = tags.map(t => t.toLowerCase());
+    if (lowerTags.some(t => t.includes('sci-fi') || t.includes('cyberpunk'))) return 'border-sky-500';
+    if (lowerTags.some(t => t.includes('fantasy'))) return 'border-emerald-500';
+    if (lowerTags.some(t => t.includes('horror'))) return 'border-violet-500';
+    if (lowerTags.some(t => t.includes('modern'))) return 'border-amber-500';
+    if (lowerTags.some(t => t.includes('historical'))) return 'border-amber-700';
+    return 'border-slate-700'; // Default
+};
+
+
 const CharacterCard: React.FC<{
   character: Character;
   onChat: (id: string) => void;
@@ -180,11 +191,13 @@ const CharacterCard: React.FC<{
     action();
     setIsMenuOpen(false);
   };
+  
+  const tagColorClass = getTagColorClass(character.tags);
 
   return (
     <div
       ref={cardRef}
-      className="card-glow bg-slate-900 rounded-lg flex flex-col group relative overflow-hidden aspect-[4/5] transition-all duration-300 hover:-translate-y-1"
+      className={`card-glow bg-slate-900 rounded-lg flex flex-col group relative overflow-hidden aspect-[4/5] transition-all duration-300 hover:-translate-y-1 border-t-4 ${tagColorClass}`}
     >
       {character.avatar ? (
         <img
@@ -483,8 +496,7 @@ function CharacterSelection({
   
   const messageCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    // FIX: Add explicit type annotation to fix 'sessionIds' being 'unknown'.
-    Object.entries(characterSessions || {}).forEach(([charId, sessionIds]: [string, string[]]) => {
+    Object.entries(characterSessions || {}).forEach(([charId, sessionIds]) => {
         let total = 0;
         sessionIds.forEach(sessionId => {
             const session = sessions[sessionId];

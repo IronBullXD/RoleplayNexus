@@ -1121,7 +1121,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                             e.target.value,
                           )
                         }
-                        className="w-full h-full bg-slate-950 p-4 resize-none border-0 focus:ring-0 custom-scrollbar absolute inset-0 text-sm leading-relaxed"
+                        className="w-full h-full bg-slate-950 p-4 resize-none border-0 focus:ring-0 custom-scrollbar absolute inset-0 text-sm leading-loose"
                         placeholder="Enter lore content here... You can use markdown for bold and italics."
                       />
                     </div>

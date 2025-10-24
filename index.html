@@ -39,6 +39,46 @@
         --color-ember-700: 194 65 12;
         --color-ember-800: 154 52 18;
         --color-ember-900: 124 45 18;
+
+        --color-sky-200: 191 219 254;
+        --color-sky-300: 147 197 253;
+        --color-sky-400: 96 165 250;
+        --color-sky-500: 59 130 246;
+        --color-sky-600: 37 99 235;
+        --color-sky-700: 29 78 216;
+        --color-sky-800: 30 64 175;
+        --color-sky-900: 30 58 138;
+        --color-sky-950: 24 37 84;
+
+        --color-emerald-200: 167 243 208;
+        --color-emerald-300: 110 231 183;
+        --color-emerald-400: 52 211 153;
+        --color-emerald-500: 16 185 129;
+        --color-emerald-600: 5 150 105;
+        --color-emerald-700: 4 120 87;
+        --color-emerald-800: 6 95 70;
+        --color-emerald-900: 6 78 59;
+        --color-emerald-950: 2 44 34;
+
+        --color-violet-200: 221 214 254;
+        --color-violet-300: 196 181 253;
+        --color-violet-400: 167 139 250;
+        --color-violet-500: 139 92 246;
+        --color-violet-600: 124 58 237;
+        --color-violet-700: 109 40 217;
+        --color-violet-800: 91 33 182;
+        --color-violet-900: 76 29 149;
+        --color-violet-950: 46 16 101;
+
+        --color-amber-200: 254 240 138;
+        --color-amber-300: 253 224 71;
+        --color-amber-400: 251 191 36;
+        --color-amber-500: 245 158 11;
+        --color-amber-600: 217 119 6;
+        --color-amber-700: 180 83 9;
+        --color-amber-800: 146 64 14;
+        --color-amber-900: 120 53 15;
+        --color-amber-950: 69 28 6;
       }
     </style>
     <script>
@@ -80,7 +120,51 @@
                 700: 'rgb(var(--color-ember-700) / <alpha-value>)',
                 800: 'rgb(var(--color-ember-800) / <alpha-value>)',
                 900: 'rgb(var(--color-ember-900) / <alpha-value>)',
-              }
+              },
+              sky: {
+                200: 'rgb(var(--color-sky-200) / <alpha-value>)',
+                300: 'rgb(var(--color-sky-300) / <alpha-value>)',
+                400: 'rgb(var(--color-sky-400) / <alpha-value>)',
+                500: 'rgb(var(--color-sky-500) / <alpha-value>)',
+                600: 'rgb(var(--color-sky-600) / <alpha-value>)',
+                700: 'rgb(var(--color-sky-700) / <alpha-value>)',
+                800: 'rgb(var(--color-sky-800) / <alpha-value>)',
+                900: 'rgb(var(--color-sky-900) / <alpha-value>)',
+                950: 'rgb(var(--color-sky-950) / <alpha-value>)',
+              },
+              emerald: {
+                200: 'rgb(var(--color-emerald-200) / <alpha-value>)',
+                300: 'rgb(var(--color-emerald-300) / <alpha-value>)',
+                400: 'rgb(var(--color-emerald-400) / <alpha-value>)',
+                500: 'rgb(var(--color-emerald-500) / <alpha-value>)',
+                600: 'rgb(var(--color-emerald-600) / <alpha-value>)',
+                700: 'rgb(var(--color-emerald-700) / <alpha-value>)',
+                800: 'rgb(var(--color-emerald-800) / <alpha-value>)',
+                900: 'rgb(var(--color-emerald-900) / <alpha-value>)',
+                950: 'rgb(var(--color-emerald-950) / <alpha-value>)',
+              },
+              violet: {
+                200: 'rgb(var(--color-violet-200) / <alpha-value>)',
+                300: 'rgb(var(--color-violet-300) / <alpha-value>)',
+                400: 'rgb(var(--color-violet-400) / <alpha-value>)',
+                500: 'rgb(var(--color-violet-500) / <alpha-value>)',
+                600: 'rgb(var(--color-violet-600) / <alpha-value>)',
+                700: 'rgb(var(--color-violet-700) / <alpha-value>)',
+                800: 'rgb(var(--color-violet-800) / <alpha-value>)',
+                900: 'rgb(var(--color-violet-900) / <alpha-value>)',
+                950: 'rgb(var(--color-violet-950) / <alpha-value>)',
+              },
+              amber: {
+                200: 'rgb(var(--color-amber-200) / <alpha-value>)',
+                300: 'rgb(var(--color-amber-300) / <alpha-value>)',
+                400: 'rgb(var(--color-amber-400) / <alpha-value>)',
+                500: 'rgb(var(--color-amber-500) / <alpha-value>)',
+                600: 'rgb(var(--color-amber-600) / <alpha-value>)',
+                700: 'rgb(var(--color-amber-700) / <alpha-value>)',
+                800: 'rgb(var(--color-amber-800) / <alpha-value>)',
+                900: 'rgb(var(--color-amber-900) / <alpha-value>)',
+                950: 'rgb(var(--color-amber-950) / <alpha-value>)',
+              },
             },
             keyframes: {
               'message-in': {
@@ -103,6 +187,7 @@
     <style>
       body {
         overflow: hidden; /* Prevent page-level scrollbars */
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
       }
       ::selection {
         background-color: rgb(var(--color-crimson-700));
@@ -210,7 +295,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-950 text-slate-100">
+  <body class="bg-slate-950 text-slate-100 leading-loose">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

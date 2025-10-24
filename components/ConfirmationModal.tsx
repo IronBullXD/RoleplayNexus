@@ -21,7 +21,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   const confirmButtonClasses = {
     primary:
-      'bg-crimson-600 hover:bg-crimson-500 border-crimson-400/50 shadow-crimson-900/50',
+      'bg-sky-600 hover:bg-sky-500 border-sky-400/50 shadow-sky-900/50',
     danger:
       'bg-ember-600 hover:bg-ember-500 border-ember-400/50 shadow-ember-900/50',
   };

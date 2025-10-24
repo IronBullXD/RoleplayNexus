@@ -99,7 +99,7 @@ function HistoryModal({ onClose }: HistoryModalProps) {
   const singleChatSessions = useMemo(
     () =>
       Object.entries(characterSessions || {})
-        .flatMap(([charId, sessionIds]: [string, string[]]) => {
+        .flatMap(([charId, sessionIds]) => {
             return sessionIds.map(sessionId => {
                 const session: Session | undefined = sessions[sessionId];
                 if (!session) return null;

@@ -12,8 +12,8 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Switched to a state class property initializer for correct typing.
-  public state: State = {
+  // state class property for initialization
+  state: State = {
     hasError: false,
     error: undefined,
   };

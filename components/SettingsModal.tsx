@@ -367,7 +367,7 @@ function PromptsSection({
             setSettings((p) => ({ ...p, systemPrompt: e.target.value }))
           }
           rows={8}
-          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 font-mono text-xs leading-relaxed custom-scrollbar"
+          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 font-mono text-xs leading-loose custom-scrollbar"
         />
       </FormField>
       <FormField
@@ -382,7 +382,7 @@ function PromptsSection({
             setSettings((p) => ({ ...p, responsePrefill: e.target.value }))
           }
           rows={3}
-          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 font-mono text-xs leading-relaxed placeholder:text-slate-600 custom-scrollbar"
+          className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 sm:text-sm p-3 font-mono text-xs leading-loose placeholder:text-slate-600 custom-scrollbar"
           placeholder='Example: "Understood. I will now reply as dramatically as possible..."'
         />
       </FormField>

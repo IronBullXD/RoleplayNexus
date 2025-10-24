@@ -23,9 +23,9 @@ export const DateSeparator: React.FC<{ timestamp: number }> = ({
 };
 
 export const SystemMessage: React.FC<{ message: Message }> = ({ message }) => (
-  <div className="flex justify-center items-center gap-3 my-4 text-xs text-slate-500 font-semibold animate-fade-in">
-    <Icon name="brain" className="w-4 h-4" />
-    <p>{message.content}</p>
+  <div className="my-4 text-sm text-sky-300 bg-sky-950/50 border border-sky-800/70 rounded-lg p-3 flex items-start gap-3 animate-fade-in">
+    <Icon name="brain" className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+    <p className="flex-1">{message.content}</p>
   </div>
 );
 
