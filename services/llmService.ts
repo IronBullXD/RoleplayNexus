@@ -10,6 +10,7 @@ import {
   AiAnalysisReport,
   WorldCoherenceReport,
   ValidationIssue,
+  WorldEntryCategory,
 } from '../types';
 import { API_ENDPOINTS } from '../constants';
 import { logger } from './logger';
@@ -388,6 +389,21 @@ interface AiAnalysisParams {
   apiKey: string;
   model: string;
   world: World;
+}
+
+export interface GenerateWorldParams {
+  provider: LLMProvider;
+  apiKey: string;
+  model: string;
+  concept: string;
+}
+
+export interface RefineWorldParams {
+  provider: LLMProvider;
+  apiKey: string;
+  model: string;
+  world: World;
+  instruction: string;
 }
 
 
@@ -1321,4 +1337,91 @@ Based on the conversation history, generate the next turn in the scene.`;
   } catch (error) {
     throw handleApiError(error, provider);
   }
+}
+
+// --- AI World Editor Functions ---
+
+const worldEntrySchema = {
+    type: Type.OBJECT,
+    properties: {
+      name: { type: Type.STRING, description: 'The display name for the entry.' },
+      keys: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Keywords to trigger this entry.' },
+      content: { type: Type.STRING, description: 'The detailed content of the lore entry.' },
+      category: { type: Type.STRING, enum: Object.values(WorldEntryCategory), description: 'The category of the entry.' },
+    },
+    required: ['name', 'keys', 'content', 'category'],
+};
+
+const worldGenerationSchema = {
+    type: Type.OBJECT,
+    properties: {
+        name: { type: Type.STRING, description: 'A creative and fitting name for the world.' },
+        description: { type: Type.STRING, description: 'A brief, 1-2 sentence evocative description of the world.' },
+        category: { type: Type.STRING, description: 'A high-level category like Fantasy, Sci-Fi, etc.' },
+        tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'An array of 3-5 descriptive tags.' },
+        entries: { type: Type.ARRAY, items: worldEntrySchema, description: 'An array of 5-10 detailed lore entries.' },
+    },
+    required: ['name', 'description', 'category', 'tags', 'entries'],
+};
+
+export async function generateWorldFromConcept({ provider, apiKey, model, concept, }: GenerateWorldParams): Promise<Partial<World>> {
+  if (provider !== LLMProvider.GEMINI) throw new Error("AI World Generation is currently only supported by Gemini.");
+  
+  const systemPrompt = `You are a creative world-building AI. Based on the user's concept, generate a comprehensive world. Your response must be a single JSON object matching the provided schema. The world should have a name, description, tags, category, and a list of at least 5-10 detailed lore entries across different categories (Locations, Factions, Characters, Lore, etc.). Ensure the content is rich and interconnected.`;
+  logger.apiRequest('Generating world from concept', { provider, model, concept });
+
+  try {
+    const response = await geminiAI.models.generateContent({
+        model,
+        contents: `World Concept: "${concept}"`,
+        config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.7,
+            responseMimeType: 'application/json',
+            responseSchema: worldGenerationSchema,
+        },
+    });
+    const jsonStr = response.text;
+    if (!jsonStr) throw new Error('Received an empty response from the AI.');
+    return JSON.parse(jsonStr.trim()) as Partial<World>;
+  } catch(error) {
+    throw handleApiError(error, provider);
+  }
+}
+
+const worldRefinementSchema = { ...worldGenerationSchema, properties: { ...worldGenerationSchema.properties, id: { type: Type.STRING } } };
+(worldRefinementSchema.properties.entries.items as any).properties.id = { type: Type.STRING };
+
+
+export async function refineWorldWithInstruction({ provider, apiKey, model, world, instruction }: RefineWorldParams): Promise<World> {
+    if (provider !== LLMProvider.GEMINI) throw new Error("AI World Refinement is currently only supported by Gemini.");
+
+    const systemPrompt = `You are an AI assistant that modifies a world's JSON data based on a user's instruction. You will be given the current world as a JSON object and a text instruction. Your task is to return the *entire* modified world object as a single JSON object that conforms to the schema. Do not add any commentary. Make the requested change and keep the rest of the world data intact.
+    
+    CRITICAL INSTRUCTIONS:
+    - Preserve all existing 'id' fields for the world and its entries.
+    - When adding a new entry, generate a unique placeholder ID for it (e.g., "new-entry-1").
+    - Interpret instructions like 'add', 'create', 'edit', 'change', 'delete', 'remove', 'merge', and 'combine'.
+    - If an instruction is vague, make a creative and reasonable interpretation.`;
+
+    const userPrompt = `Here is the current world state:\n\n${JSON.stringify(world)}\n\nApply this instruction: "${instruction}"`;
+    logger.apiRequest('Refining world with instruction', { provider, model, instruction });
+    
+    try {
+        const response = await geminiAI.models.generateContent({
+            model,
+            contents: userPrompt,
+            config: {
+                systemInstruction: systemPrompt,
+                temperature: 0.5,
+                responseMimeType: 'application/json',
+                responseSchema: worldRefinementSchema,
+            },
+        });
+        const jsonStr = response.text;
+        if (!jsonStr) throw new Error('Received an empty response from the AI.');
+        return JSON.parse(jsonStr.trim()) as World;
+    } catch(error) {
+        throw handleApiError(error, provider);
+    }
 }

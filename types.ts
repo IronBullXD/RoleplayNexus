@@ -63,6 +63,8 @@ export enum WorldEntryCategory {
   FACTION = 'Faction',
   LORE = 'Lore/History',
   EVENT = 'Event',
+  MONSTER_CREATURE = 'Monster/Creature',
+  ORGANIZATION = 'Organization',
 }
 
 export interface WorldEntry {

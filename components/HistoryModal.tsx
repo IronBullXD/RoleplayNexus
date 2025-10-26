@@ -100,7 +100,8 @@ function HistoryModal({ onClose }: HistoryModalProps) {
     () =>
       Object.entries(characterSessions || {})
         .flatMap(([charId, sessionIds]) => {
-            return sessionIds.map(sessionId => {
+            // FIX: Cast `sessionIds` to `string[]` to avoid potential `unknown` type error.
+            return (sessionIds as string[]).map(sessionId => {
                 const session: Session | undefined = sessions[sessionId];
                 if (!session) return null;
                 const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;

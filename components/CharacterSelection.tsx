@@ -421,7 +421,7 @@ function CharacterSelection({
           ? sessionIds.map((sessionId) => {
                 const s: Session | undefined = sessions[sessionId];
                 if (!s || (s.messageIds || []).length === 0) return null;
-                const lastMessage = s.messageIds.length > 0 ? allMessages[s.messageIds[s.messageIds.length-1]] : null;
+                const lastMessage = s.messageIds.length > 0 ? allMessages[s.messageIds[s.messageIds.length - 1]] : null;
                 return {
                     type: 'single' as const,
                     id: s.id,
@@ -498,7 +498,8 @@ function CharacterSelection({
     const counts = new Map<string, number>();
     Object.entries(characterSessions || {}).forEach(([charId, sessionIds]) => {
         let total = 0;
-        sessionIds.forEach(sessionId => {
+        // FIX: Cast `sessionIds` to `string[]` to avoid potential `unknown` type error.
+        (sessionIds as string[]).forEach(sessionId => {
             const session = sessions[sessionId];
             if (session) {
                 total += (session.messageIds || [])

@@ -8,6 +8,25 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { warmWorldCache } from '../services/llmService';
 import { logger } from '../services/logger';
 import { DEFAULT_WORLD_TEMPLATES, WORLD_CATEGORIES } from '../constants';
+import AIWorldEditor from './AIWorldEditor';
+import { Tooltip } from './Tooltip';
+
+const getCategoryTagClass = (category?: string) => {
+    switch (category?.toLowerCase()) {
+        case 'fantasy':
+            return 'bg-crimson-900/50 text-crimson-300';
+        case 'sci-fi':
+            return 'bg-sky-900/50 text-sky-300';
+        case 'modern':
+            return 'bg-amber-900/50 text-amber-300';
+        case 'historical':
+            return 'bg-ember-900/50 text-ember-300';
+        case 'horror':
+            return 'bg-violet-900/50 text-violet-300';
+        default:
+            return 'bg-slate-700 text-slate-300';
+    }
+};
 
 const CustomCheckbox: React.FC<{
   checked: boolean;
@@ -62,14 +81,17 @@ interface WorldsPageProps {
   onClose: () => void;
 }
 
-const WorldItem: React.FC<{
+interface WorldItemProps {
   world: World;
   onEdit: () => void;
+  onEditWithAi: () => void;
   onDelete: () => void;
   onExport: () => void;
   isSelected: boolean;
   onToggleSelect: () => void;
-}> = ({ world, onEdit, onDelete, onExport, isSelected, onToggleSelect }) => (
+}
+
+const WorldItem: React.FC<WorldItemProps> = ({ world, onEdit, onEditWithAi, onDelete, onExport, isSelected, onToggleSelect }) => (
   <div
     onClick={onToggleSelect}
     className={`w-full flex items-center gap-2 p-2 pr-4 bg-slate-900/50 border hover:bg-slate-800/50 rounded-lg transition-all group cursor-pointer ${
@@ -112,35 +134,51 @@ const WorldItem: React.FC<{
       className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-        onClick={onEdit}
-        className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
-        aria-label={`Edit world: ${world.name}`}
-      >
-        <Icon name="edit" className="w-5 h-5" />
-      </button>
-      <button
-        onClick={onExport}
-        className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
-        aria-label={`Export world: ${world.name}`}
-      >
-        <Icon name="export" className="w-5 h-5" />
-      </button>
-      <button
-        onClick={onDelete}
-        className="p-2 text-slate-400 hover:text-ember-500 hover:bg-slate-700/50 rounded-md"
-        aria-label={`Delete world: ${world.name}`}
-      >
-        <Icon name="delete" className="w-5 h-5" />
-      </button>
+      <Tooltip content="Edit" position="top">
+        <button
+          onClick={onEdit}
+          className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Edit world: ${world.name}`}
+        >
+          <Icon name="edit" className="w-5 h-5" />
+        </button>
+      </Tooltip>
+      <Tooltip content="Edit with AI" position="top">
+        <button
+          onClick={onEditWithAi}
+          className="p-2 text-slate-400 hover:text-purple-400 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Edit world with AI: ${world.name}`}
+        >
+          <Icon name="sparkles" className="w-5 h-5" />
+        </button>
+      </Tooltip>
+      <Tooltip content="Export" position="top">
+        <button
+          onClick={onExport}
+          className="p-2 text-slate-400 hover:text-crimson-400 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Export world: ${world.name}`}
+        >
+          <Icon name="export" className="w-5 h-5" />
+        </button>
+      </Tooltip>
+      <Tooltip content="Delete" position="top">
+        <button
+          onClick={onDelete}
+          className="p-2 text-slate-400 hover:text-ember-500 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Delete world: ${world.name}`}
+        >
+          <Icon name="delete" className="w-5 h-5" />
+        </button>
+      </Tooltip>
     </div>
   </div>
 );
 
 const TemplateSelectionModal: React.FC<{
   onSelect: (template: Partial<World> | null) => void;
+  onSelectAi: () => void;
   onClose: () => void;
-}> = ({ onSelect, onClose }) => {
+}> = ({ onSelect, onSelectAi, onClose }) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -172,19 +210,28 @@ const TemplateSelectionModal: React.FC<{
               <Icon name="add" className="w-10 h-10 text-slate-600" />
               <p className="mt-2 font-semibold text-slate-400">Start with a Blank World</p>
             </button>
+            <button
+              onClick={onSelectAi}
+              className="bg-purple-900/20 rounded-lg p-4 flex flex-col items-center justify-center text-center h-48 border-2 border-dashed border-purple-500/50 hover:border-purple-400 hover:bg-purple-900/40 transition-colors animate-pulse-glow-purple"
+            >
+              <Icon name="sparkles" className="w-10 h-10 text-purple-400" />
+              <p className="mt-2 font-semibold text-purple-300">Use AI Assistant</p>
+            </button>
             {DEFAULT_WORLD_TEMPLATES.map(template => (
               <button
                 key={template.id}
                 onClick={() => onSelect(template)}
-                className="bg-slate-800/50 rounded-lg p-4 flex flex-col text-left h-48 border-2 border-slate-700 hover:border-crimson-500 hover:bg-slate-800 transition-colors"
+                className="bg-slate-800/50 rounded-lg p-4 flex flex-col justify-between text-left h-48 border-2 border-slate-700 hover:border-crimson-500 hover:bg-slate-800 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                    <Avatar src={template.avatar} alt={template.name} shape="square" className="w-10 h-10" />
-                    <h3 className="font-bold text-slate-100 flex-1">{template.name}</h3>
+                <div>
+                  <div className="flex items-center gap-3">
+                      <Avatar src={template.avatar} alt={template.name} shape="square" className="w-10 h-10" />
+                      <h3 className="font-bold text-slate-100 flex-1">{template.name}</h3>
+                  </div>
+                  <p className="text-sm text-slate-400 mt-2 line-clamp-3">{template.description}</p>
                 </div>
-                <p className="text-sm text-slate-400 mt-2 flex-1">{template.description}</p>
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold bg-crimson-900/50 text-crimson-300 px-2 py-0.5 rounded-full">{template.category}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getCategoryTagClass(template.category)}`}>{template.category}</span>
                 </div>
               </button>
             ))}
@@ -199,6 +246,7 @@ const TemplateSelectionModal: React.FC<{
 const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
   const { worlds, saveWorld, deleteWorld, importWorlds } = useWorldStore();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isAiEditorOpen, setIsAiEditorOpen] = useState(false);
   const [isTemplateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingWorld, setEditingWorld] = useState<Partial<World> | null>(null);
   const [selectedWorldIds, setSelectedWorldIds] = useState<Set<string>>(new Set());
@@ -210,11 +258,11 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isEditorOpen && !isTemplateModalOpen) onClose();
+      if (e.key === 'Escape' && !isEditorOpen && !isTemplateModalOpen && !isAiEditorOpen) onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isEditorOpen, isTemplateModalOpen]);
+  }, [onClose, isEditorOpen, isTemplateModalOpen, isAiEditorOpen]);
 
   useEffect(() => {
     if (worlds.length > 0) {
@@ -232,14 +280,25 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
     setIsEditorOpen(true);
     setTemplateModalOpen(false);
   }, []);
+  
+  const handleCreateWithAi = useCallback(() => {
+    setEditingWorld(null);
+    setTemplateModalOpen(false);
+    setIsAiEditorOpen(true);
+  }, []);
 
   const handleEdit = (world: World) => {
     setEditingWorld(world);
     setIsEditorOpen(true);
   };
+  const handleEditWithAi = (world: World) => {
+    setEditingWorld(world);
+    setIsAiEditorOpen(true);
+  };
   const handleSave = (world: World) => {
     saveWorld(world);
     setIsEditorOpen(false);
+    setIsAiEditorOpen(false);
     setEditingWorld(null);
   };
 
@@ -320,6 +379,47 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
     }
   };
   
+  const handleExportSelectedAsText = () => {
+    if (selectedWorldIds.size === 0) {
+      alert('No worlds selected to export.');
+      return;
+    }
+    const worldsToExport = worlds.filter((w) => selectedWorldIds.has(w.id));
+    
+    const textContent = worldsToExport
+      .map(world => {
+        const worldHeader = `[${world.name}]`;
+        const entriesText = (world.entries || [])
+          .filter(entry => entry.enabled && entry.content)
+          .map(entry => `--- ${entry.name || 'Unnamed Entry'} ---\n${entry.content}`)
+          .join('\n\n');
+
+        if (!entriesText) {
+          return `${worldHeader}\n(This world has no exportable entries.)`;
+        }
+        
+        return `${worldHeader}\n\n${entriesText}`;
+      })
+      .join('\n\n\n');
+
+    try {
+      const filename = worldsToExport.length === 1
+        ? `${worldsToExport[0].name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.txt`
+        : `roleplay_nexus_worlds.txt`;
+      const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Error exporting worlds as text: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
   const worldCategories = useMemo(() => ['All', ...new Set(worlds.map(w => w.category).filter(Boolean) as string[])], [worlds]);
 
   const filteredAndSortedWorlds = useMemo(() => {
@@ -347,6 +447,7 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
 
   return (
     <>
+      <style>{`.animate-pulse-glow-purple { animation: pulse-glow-purple 3s infinite ease-in-out; } @keyframes pulse-glow-purple { 0%, 100% { box-shadow: 0 0 12px 2px rgb(168 85 247 / 0.4); } 50% { box-shadow: 0 0 20px 5px rgb(168 85 247 / 0.2); } }`}</style>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -395,7 +496,7 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
             <div className="space-y-3">
               {filteredAndSortedWorlds.length > 0 ? (
                 filteredAndSortedWorlds.map((world) => (
-                  <WorldItem key={world.id} world={world} onEdit={() => handleEdit(world)} onDelete={() => deleteWorld(world.id)} onExport={() => handleExportWorld(world)} isSelected={selectedWorldIds.has(world.id)} onToggleSelect={() => handleToggleWorldSelection(world.id)} />
+                  <WorldItem key={world.id} world={world} onEdit={() => handleEdit(world)} onEditWithAi={() => handleEditWithAi(world)} onDelete={() => deleteWorld(world.id)} onExport={() => handleExportWorld(world)} isSelected={selectedWorldIds.has(world.id)} onToggleSelect={() => handleToggleWorldSelection(world.id)} />
                 ))
               ) : (
                 <div className="text-center text-slate-500 pt-16 flex flex-col items-center">
@@ -414,7 +515,8 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
             <div className="flex items-center gap-2">
               <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".json" />
               <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"><Icon name="import" className="w-4 h-4" /> Import</button>
-              <button onClick={handleExportSelectedWorlds} disabled={selectedWorldIds.size === 0} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"><Icon name="export" className="w-4 h-4" /> {selectedWorldIds.size > 0 ? `Export Selected (${selectedWorldIds.size})` : 'Export Selected'}</button>
+              <button onClick={handleExportSelectedWorlds} disabled={selectedWorldIds.size === 0} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"><Icon name="export" className="w-4 h-4" /> {selectedWorldIds.size > 0 ? `Export JSON (${selectedWorldIds.size})` : 'Export JSON'}</button>
+              <button onClick={handleExportSelectedAsText} disabled={selectedWorldIds.size === 0} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"><Icon name="export" className="w-4 h-4" /> Export Text</button>
             </div>
             <button onClick={() => setTemplateModalOpen(true)} className="px-4 py-2 text-sm font-semibold text-white bg-crimson-600 hover:bg-crimson-500 rounded-lg transition-colors border border-crimson-400/50 shadow-md shadow-crimson-900/50">Create New World</button>
           </footer>
@@ -422,7 +524,8 @@ const WorldsPage: React.FC<WorldsPageProps> = ({ onClose }) => {
       </motion.div>
       <AnimatePresence>
         {isEditorOpen && (<WorldEditorPage world={editingWorld} onSave={handleSave} onClose={() => setIsEditorOpen(false)} />)}
-        {isTemplateModalOpen && (<TemplateSelectionModal onSelect={handleCreateFromTemplate} onClose={() => setTemplateModalOpen(false)} />)}
+        {isAiEditorOpen && (<AIWorldEditor world={editingWorld} onSave={handleSave} onClose={() => setIsAiEditorOpen(false)} />)}
+        {isTemplateModalOpen && (<TemplateSelectionModal onSelect={handleCreateFromTemplate} onSelectAi={handleCreateWithAi} onClose={() => setTemplateModalOpen(false)} />)}
       </AnimatePresence>
     </>
   );

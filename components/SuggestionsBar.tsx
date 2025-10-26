@@ -18,6 +18,8 @@ const categoryIcons: Record<WorldEntryCategory, string> = {
   [WorldEntryCategory.LORE]: 'book-open',
   [WorldEntryCategory.EVENT]: 'calendar',
   [WorldEntryCategory.WORLD]: 'globe',
+  [WorldEntryCategory.MONSTER_CREATURE]: 'bug',
+  [WorldEntryCategory.ORGANIZATION]: 'users-2',
 };
 
 const SuggestionsBar: React.FC<SuggestionsBarProps> = ({ suggestions, onSuggestionClick, onClose }) => {

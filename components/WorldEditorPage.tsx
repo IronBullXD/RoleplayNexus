@@ -30,6 +30,8 @@ const categoryIcons: Record<WorldEntryCategory, string> = {
   [WorldEntryCategory.LORE]: 'book-open',
   [WorldEntryCategory.EVENT]: 'calendar',
   [WorldEntryCategory.WORLD]: 'globe',
+  [WorldEntryCategory.MONSTER_CREATURE]: 'bug',
+  [WorldEntryCategory.ORGANIZATION]: 'users-2',
 };
 
 const categoryOptions = Object.values(WorldEntryCategory);
@@ -380,20 +382,20 @@ const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
       <InspectorSection title="Linked Lore" icon="book-open">
         <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 bg-slate-800/50 border-2 border-slate-700 rounded-md">
           {linkedEntries.length > 0 ? (
-            <div className="flex flex-wrap gap-2 items-start">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
               {linkedEntries.map((linked) => (
                 <div
                   key={linked.id}
-                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-crimson-300 bg-crimson-900/50 border border-crimson-700/50 rounded-full"
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs text-crimson-300 bg-crimson-900/50 border border-crimson-700/50 rounded-full truncate"
                 >
                   <Icon
                     name={
                       categoryIcons[linked.category || WorldEntryCategory.LORE] ||
                       'book-open'
                     }
-                    className="w-3 h-3"
+                    className="w-3 h-3 shrink-0"
                   />
-                  <span>{linked.name || 'Unnamed'}</span>
+                  <span className="truncate">{linked.name || 'Unnamed'}</span>
                 </div>
               ))}
             </div>

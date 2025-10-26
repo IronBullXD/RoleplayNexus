@@ -12,11 +12,19 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // state class property for initialization
-  state: State = {
-    hasError: false,
-    error: undefined,
-  };
+  // FIX: Explicitly declare state for strict property initialization.
+  public state: State;
+
+  // FIX: Switched to constructor-based state initialization for broader compatibility and to resolve typing issues.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+    };
+    // FIX: Bind class methods in the constructor to ensure correct `this` context.
+    this.handleRetry = this.handleRetry.bind(this);
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -35,9 +43,9 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  handleRetry = (): void => {
+  handleRetry(): void {
     this.setState({ hasError: false, error: undefined });
-  };
+  }
 
   render(): ReactNode {
     if (this.state.hasError) {

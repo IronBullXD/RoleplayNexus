@@ -46,6 +46,7 @@ import {
   Palette,
   Zap,
   CheckSquare,
+  Users2,
 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -97,6 +98,7 @@ const icons: { [key: string]: LucideIconComponent } = {
   lightbulb: Lightbulb,
   palette: Palette,
   zap: Zap,
+  'users-2': Users2,
 };
 
 interface IconProps extends LucideProps {
