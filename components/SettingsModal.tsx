@@ -4,6 +4,7 @@ import { Icon } from './Icon';
 import { useSettingsStore } from '../store/stores/settingsStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemeEditorModal from './ThemeEditorModal';
+import { API_ENDPOINTS } from '../constants';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -232,6 +233,9 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
   settings,
   setSettings,
 }) => {
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+
   const isGemini = provider === LLMProvider.GEMINI;
   const info = {
     [LLMProvider.GEMINI]: {
@@ -249,6 +253,50 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
       keyLink: 'https://platform.deepseek.com/api_keys',
     },
   }[provider];
+  
+  const handleTestKey = async () => {
+    setTestStatus('testing');
+    setTestMessage(null);
+
+    const apiKey = settings.apiKeys[provider];
+    const model = settings.models?.[provider];
+    const endpoint = API_ENDPOINTS[provider as keyof typeof API_ENDPOINTS];
+
+    if (!model) {
+        setTestStatus('error');
+        setTestMessage('A model name is required to run a test.');
+        return;
+    }
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: 'user', content: 'test' }],
+                max_tokens: 1,
+                stream: false,
+            }),
+        });
+
+        if (response.ok) {
+            setTestStatus('success');
+            setTestMessage('Connection successful!');
+        } else {
+            const errorData = await response.json().catch(() => ({ error: { message: `Request failed with status: ${response.statusText} (${response.status})` } }));
+            setTestStatus('error');
+            setTestMessage(errorData.error?.message || `Invalid key or model name. (Status: ${response.status})`);
+        }
+    } catch (err) {
+        setTestStatus('error');
+        setTestMessage('Network error or invalid endpoint. Check console for details.');
+        console.error("API Key Test Error:", err);
+    }
+  };
 
   return (
     <details
@@ -279,19 +327,53 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
         </p>
         {!isGemini && (
           <FormField label="API Key" htmlFor={`${provider}-key`}>
-            <input
-              type="password"
-              id={`${provider}-key`}
-              value={settings.apiKeys[provider]}
-              onChange={(e) =>
-                setSettings((p) => ({
-                  ...p,
-                  apiKeys: { ...p.apiKeys, [provider]: e.target.value },
-                }))
-              }
-              className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3 placeholder:text-slate-600"
-              placeholder="Enter your API key"
-            />
+            <div className="flex items-center gap-2">
+                <input
+                    type="password"
+                    id={`${provider}-key`}
+                    value={settings.apiKeys[provider]}
+                    onChange={(e) => {
+                        setSettings((p) => ({
+                            ...p,
+                            apiKeys: { ...p.apiKeys, [provider]: e.target.value },
+                        }));
+                        setTestStatus('idle');
+                        setTestMessage(null);
+                    }}
+                    className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3 placeholder:text-slate-600"
+                    placeholder="Enter your API key"
+                />
+                <button
+                    type="button"
+                    onClick={handleTestKey}
+                    disabled={!settings.apiKeys[provider] || testStatus === 'testing'}
+                    className={`px-4 py-2 text-sm font-semibold border rounded-lg transition-colors shrink-0 flex items-center gap-2
+                        ${testStatus === 'testing' ? 'bg-slate-700/50 border-slate-600 text-slate-300 opacity-75 cursor-not-allowed' : ''}
+                        ${testStatus === 'success' ? 'bg-emerald-800/50 border-emerald-600 text-emerald-300' : ''}
+                        ${testStatus === 'error' ? 'bg-ember-800/50 border-ember-600 text-ember-300' : ''}
+                        ${testStatus === 'idle' ? 'bg-slate-700/50 border-slate-600 hover:bg-slate-700 text-slate-300' : ''}
+                    `}
+                >
+                    {testStatus === 'testing' && <Icon name="redo" className="w-4 h-4 animate-spin" />}
+                    {testStatus !== 'testing' && <Icon name="zap" className="w-4 h-4" />}
+                    {testStatus === 'testing' ? 'Testing...' : 'Test Key'}
+                </button>
+            </div>
+            <AnimatePresence>
+            {testMessage && (
+                <motion.p 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className={`mt-2 text-xs font-medium ${
+                        testStatus === 'success' ? 'text-emerald-400' :
+                        testStatus === 'error' ? 'text-ember-400' : 'text-slate-400'
+                    }`}
+                >
+                    {testMessage}
+                </motion.p>
+            )}
+            </AnimatePresence>
           </FormField>
         )}
         <FormField label="Model Name" htmlFor={`${provider}-model`}>
@@ -299,12 +381,14 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
             type="text"
             id={`${provider}-model`}
             value={settings.models?.[provider] || ''}
-            onChange={(e) =>
+            onChange={(e) => {
               setSettings((p) => ({
                 ...p,
                 models: { ...p.models, [provider]: e.target.value },
-              }))
-            }
+              }));
+              setTestStatus('idle');
+              setTestMessage(null);
+            }}
             className="block w-full bg-slate-950 border-2 border-slate-700 rounded-lg shadow-sm focus:ring-crimson-500 focus:border-crimson-500 focus:outline-none sm:text-sm p-3 placeholder:text-slate-600"
             placeholder={
               isGemini

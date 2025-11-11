@@ -1,15 +1,64 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Character, ChatSession, GroupChatSession, Message } from '../types';
 import { Icon } from './Icon';
 import Avatar from './Avatar';
 import { useCharacterStore } from '../store/stores/characterStore';
 import { useChatStore, GroupSession, Session } from '../store/stores/chatStore';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useUIStore } from '../store/stores/uiStore';
 
 interface HistoryModalProps {
   onClose: () => void;
 }
+
+const CustomCheckbox: React.FC<{
+  checked: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement> | React.MouseEvent) => void;
+  indeterminate?: boolean;
+  id: string;
+  label?: string;
+}> = ({ checked, onChange, indeterminate = false, id, label }) => {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative w-5 h-5 flex items-center justify-center">
+        <input
+          ref={ref}
+          type="checkbox"
+          id={id}
+          checked={checked}
+          onChange={onChange}
+          className="appearance-none w-5 h-5 border-2 border-slate-600 rounded-md checked:bg-crimson-500 checked:border-crimson-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-crimson-500 transition-colors cursor-pointer"
+        />
+        {checked && !indeterminate && (
+          <Icon
+            name="checkmark"
+            className="w-4 h-4 text-white absolute pointer-events-none"
+          />
+        )}
+        {indeterminate && (
+          <div className="w-2.5 h-1 bg-crimson-500 rounded-sm absolute pointer-events-none" />
+        )}
+      </div>
+      {label && (
+        <label
+          htmlFor={id}
+          className="text-sm font-medium text-slate-300 cursor-pointer"
+        >
+          {label}
+        </label>
+      )}
+    </div>
+  );
+};
+
 
 interface HistoryItemProps {
   avatars: (string | undefined)[];
@@ -19,6 +68,9 @@ interface HistoryItemProps {
   lastMessageTimestamp?: number;
   onSelect: () => void;
   onDelete: () => void;
+  onExport: () => void;
+  isSelected: boolean;
+  onToggleSelect: () => void;
 }
 
 const HistoryItem: React.FC<HistoryItemProps> = ({
@@ -29,9 +81,26 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   lastMessageTimestamp,
   onSelect,
   onDelete,
+  onExport,
+  isSelected,
+  onToggleSelect,
 }) => {
   return (
-    <div className="w-full flex items-center gap-2 p-2 pr-4 bg-slate-900/50 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-800/50 rounded-lg transition-all group">
+    <div
+      onClick={onToggleSelect}
+      className={`w-full flex items-center gap-2 p-2 pr-4 bg-slate-900/50 border hover:bg-slate-800/50 rounded-lg transition-all group cursor-pointer ${
+        isSelected
+          ? 'border-crimson-500/80 bg-slate-800/50'
+          : 'border-slate-800 hover:border-sky-500/50'
+      }`}
+    >
+      <div className="flex items-center pl-2" onClick={(e) => e.stopPropagation()}>
+        <CustomCheckbox
+          id={`select-history-${title}-${subtitle}`}
+          checked={isSelected}
+          onChange={onToggleSelect}
+        />
+      </div>
       <button
         onClick={onSelect}
         className="flex-1 flex items-start gap-4 overflow-hidden text-left p-2"
@@ -64,13 +133,25 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
           </p>
         </div>
       </button>
-      <button
-        onClick={onDelete}
-        className="p-2 text-slate-500 hover:text-fuchsia-500 hover:bg-slate-700/50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-        aria-label={`Delete chat: ${title}`}
+      <div
+        className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        onClick={(e) => e.stopPropagation()}
       >
-        <Icon name="delete" className="w-5 h-5" />
-      </button>
+        <button
+          onClick={onExport}
+          className="p-2 text-slate-500 hover:text-sky-400 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Export chat: ${title}`}
+        >
+          <Icon name="export" className="w-5 h-5" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-2 text-slate-500 hover:text-ember-500 hover:bg-slate-700/50 rounded-md"
+          aria-label={`Delete chat: ${title}`}
+        >
+          <Icon name="delete" className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   );
 };
@@ -84,9 +165,13 @@ function HistoryModal({ onClose }: HistoryModalProps) {
     messages: allMessages,
     deleteSession,
     deleteGroupSession,
+    exportChats,
+    importChats,
   } = useChatStore();
-  const { setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
+  const { requestConfirmation, setCurrentView, setActiveCharacterId, setActiveSessionId, setActiveGroupSessionId } = useUIStore();
   const [activeTab, setActiveTab] = useState<'single' | 'group'>('single');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -96,12 +181,45 @@ function HistoryModal({ onClose }: HistoryModalProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    // Clear selection when tab changes
+    setSelectedIds(new Set());
+  }, [activeTab]);
+
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          if (e.target?.result) {
+            importChats(e.target.result as string);
+          }
+        } catch (error) {
+          alert('Failed to parse chat file.');
+        }
+      };
+      reader.readAsText(file);
+      if (event.target) event.target.value = ''; // Reset file input
+    }
+  };
+
+  const handleExportAll = () => {
+    const allSessionIds = Object.keys(sessions);
+    const allGroupSessionIds = Object.keys(groupSessions);
+    if (allSessionIds.length === 0 && allGroupSessionIds.length === 0) {
+      alert('No chats to export.');
+      return;
+    }
+    exportChats(allSessionIds, allGroupSessionIds);
+  };
+
   const singleChatSessions = useMemo(
     () =>
       Object.entries(characterSessions || {})
-        .flatMap(([charId, sessionIds]) => {
-            // FIX: Cast `sessionIds` to `string[]` to avoid potential `unknown` type error.
-            return (sessionIds as string[]).map(sessionId => {
+        .flatMap(([charId, sessionIds]: [string, string[]]) => {
+            return sessionIds.map(sessionId => {
                 const session: Session | undefined = sessions[sessionId];
                 if (!session) return null;
                 const lastMessage = (session.messageIds || []).length > 0 ? allMessages[session.messageIds[session.messageIds.length - 1]] : null;
@@ -129,6 +247,61 @@ function HistoryModal({ onClose }: HistoryModalProps) {
         .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp),
     [groupSessions, allMessages],
   );
+
+  const displayedItems = useMemo(() => {
+    return activeTab === 'single'
+      ? singleChatSessions.map(s => ({ id: s.session.id, ...s }))
+      : groupChatSessions.map(s => ({ id: s.session.id, ...s }));
+  }, [activeTab, singleChatSessions, groupChatSessions]);
+
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        return newSet;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+      if (selectedIds.size === displayedItems.length) {
+          setSelectedIds(new Set());
+      } else {
+          setSelectedIds(new Set(displayedItems.map(item => item.id)));
+      }
+  };
+
+  const handleDeleteSelected = () => {
+    requestConfirmation(
+        () => {
+            selectedIds.forEach(id => {
+                if (activeTab === 'single') {
+                    const sessionData = singleChatSessions.find(s => s.session.id === id);
+                    if (sessionData) deleteSession(sessionData.charId, id);
+                } else {
+                    deleteGroupSession(id);
+                }
+            });
+            setSelectedIds(new Set());
+        },
+        'Delete Selected Chats',
+        `Are you sure you want to permanently delete ${selectedIds.size} selected chat(s)? This action cannot be undone.`,
+        'Delete',
+        'danger'
+    );
+  };
+
+  const handleExportSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (activeTab === 'single') {
+        exportChats(Array.from(selectedIds), []);
+    } else {
+        exportChats([], Array.from(selectedIds));
+    }
+  };
+
+  const allSelected = displayedItems.length > 0 && selectedIds.size === displayedItems.length;
+  const isIndeterminate = selectedIds.size > 0 && !allSelected;
 
   const handleSelectSession = (characterId: string, sessionId: string) => {
     setActiveCharacterId(characterId);
@@ -167,37 +340,49 @@ function HistoryModal({ onClose }: HistoryModalProps) {
           <h2 id="history-modal-title" className="text-xl font-bold font-display tracking-widest uppercase">
             Chat History
           </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close history"
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md"
-          >
-            <Icon name="close" />
-          </button>
+          <div className="flex items-center gap-2">
+            <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".json" />
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"><Icon name="import" className="w-4 h-4" /> Import Chats</button>
+            <button onClick={handleExportAll} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-700/50 hover:bg-slate-700 rounded-md transition-colors border border-slate-600"><Icon name="export" className="w-4 h-4" /> Export All</button>
+            <button
+              onClick={onClose}
+              aria-label="Close history"
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-md ml-4"
+            >
+              <Icon name="close" />
+            </button>
+          </div>
         </header>
 
         <div className="p-2 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('single')}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                activeTab === 'single'
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              Single Chats
-            </button>
-            <button
-              onClick={() => setActiveTab('group')}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                activeTab === 'group'
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              Group Chats
-            </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('single')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                  activeTab === 'single'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Single Chats
+              </button>
+              <button
+                onClick={() => setActiveTab('group')}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                  activeTab === 'group'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Group Chats
+              </button>
+            </div>
+            {displayedItems.length > 0 && (
+                <div className="flex items-center pl-2">
+                  <CustomCheckbox id="select-all-history" checked={allSelected} indeterminate={isIndeterminate} onChange={handleToggleSelectAll} label="Select All" />
+                </div>
+            )}
           </div>
         </div>
 
@@ -219,6 +404,9 @@ function HistoryModal({ onClose }: HistoryModalProps) {
                       lastMessageTimestamp={lastMessage?.timestamp}
                       onSelect={() => handleSelectSession(charId, session.id)}
                       onDelete={() => deleteSession(charId, session.id)}
+                      onExport={() => exportChats([session.id], [])}
+                      isSelected={selectedIds.has(session.id)}
+                      onToggleSelect={() => handleToggleSelection(session.id)}
                     />
                   );
                 })
@@ -247,6 +435,9 @@ function HistoryModal({ onClose }: HistoryModalProps) {
                       lastMessageTimestamp={lastMessage?.timestamp}
                       onSelect={() => handleSelectGroupSession(session.id)}
                       onDelete={() => deleteGroupSession(session.id)}
+                      onExport={() => exportChats([], [session.id])}
+                      isSelected={selectedIds.has(session.id)}
+                      onToggleSelect={() => handleToggleSelection(session.id)}
                     />
                   );
                 })
@@ -258,6 +449,27 @@ function HistoryModal({ onClose }: HistoryModalProps) {
             </div>
           )}
         </main>
+        <AnimatePresence>
+          {selectedIds.size > 0 && (
+            <motion.footer
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+                className="shrink-0 bg-slate-800/95 backdrop-blur-sm border-t border-slate-700 p-3 flex items-center justify-between"
+            >
+                <p className="text-sm font-semibold text-slate-300">{selectedIds.size} chat(s) selected</p>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleExportSelected} className="px-3 py-1.5 text-sm font-semibold text-sky-300 bg-sky-900/50 rounded-md hover:bg-sky-800/50 border border-sky-700/50">
+                        Export Selected
+                    </button>
+                    <button onClick={handleDeleteSelected} className="px-3 py-1.5 text-sm font-semibold text-ember-300 bg-ember-900/50 rounded-md hover:bg-ember-800/50 border border-ember-700/50">
+                        Delete Selected
+                    </button>
+                </div>
+            </motion.footer>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   );

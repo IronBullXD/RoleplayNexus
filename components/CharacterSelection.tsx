@@ -496,10 +496,10 @@ function CharacterSelection({
   
   const messageCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    Object.entries(characterSessions || {}).forEach(([charId, sessionIds]) => {
+    Object.entries(characterSessions || {}).forEach(([charId, sessionIds]: [string, string[]]) => {
         let total = 0;
-        // FIX: Cast `sessionIds` to `string[]` to avoid potential `unknown` type error.
-        (sessionIds as string[]).forEach(sessionId => {
+        // FIX: Removed redundant cast to string[], as sessionIds is already correctly typed.
+        sessionIds.forEach(sessionId => {
             const session = sessions[sessionId];
             if (session) {
                 total += (session.messageIds || [])

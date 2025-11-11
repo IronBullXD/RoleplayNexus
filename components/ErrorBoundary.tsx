@@ -10,25 +10,20 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
-  // FIX: Explicitly declare state for strict property initialization.
-  public state: State;
-
-  // FIX: Switched to constructor-based state initialization for broader compatibility and to resolve typing issues.
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-    };
-    // FIX: Bind class methods in the constructor to ensure correct `this` context.
-    this.handleResetAndReload = this.handleResetAndReload.bind(this);
-  }
+  // FIX: Reverted state initialization to use a class property.
+  // The constructor-based initialization was causing issues with `this` context in some build environments.
+  state: State = {
+    hasError: false,
+    error: undefined,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+  // FIX: Using an arrow function for lifecycle methods ensures `this` is correctly bound.
+  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     logger.error('Uncaught UI Error', {
       error: {
         message: error.message,
@@ -39,7 +34,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  handleResetAndReload(): void {
+  // Use arrow function for event handler to automatically bind `this`
+  handleResetAndReload = (): void => {
     logger.log('Attempting to clear storage and reload from error boundary.');
     try {
       window.localStorage.clear();
@@ -49,6 +45,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     window.location.reload();
   }
 
+  // FIX: Using an arrow function for render ensures `this` is correctly bound, resolving issues where 'this.props' might not be found.
+  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

@@ -318,6 +318,7 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
     forkGroupChat,
     sendGroupMessage,
     continueGroupGeneration,
+    exportChats,
   } = useChatStore();
 
   const characters = useCharacterStore(state => state.characters);
@@ -540,6 +541,11 @@ function GroupChatWindow({ onNavigateToHistory }: GroupChatWindowProps) {
             icon="history"
             label="Chat History"
             onClick={() => onNavigateToHistory()}
+          />
+          <IconButton
+            icon="export"
+            label="Export Chat"
+            onClick={() => activeGroupSessionId && exportChats([], [activeGroupSessionId])}
           />
           <IconButton
             icon="check-square"

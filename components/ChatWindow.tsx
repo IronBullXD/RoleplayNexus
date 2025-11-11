@@ -103,6 +103,7 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
     continueGeneration,
     deleteMultipleMessages,
     setActiveAlternate,
+    exportChats,
   } = useChatStore();
 
   const { userPersona, settings } = useSettingsStore();
@@ -301,6 +302,11 @@ function ChatWindow({ onNavigateToHistory }: ChatWindowProps) {
             icon="history"
             label="Chat History"
             onClick={() => onNavigateToHistory()}
+          />
+          <IconButton
+            icon="export"
+            label="Export Chat"
+            onClick={() => activeSessionId && exportChats([activeSessionId], [])}
           />
           <IconButton
             icon="check-square"

@@ -22,6 +22,31 @@ import { handleApiError } from './errorHandler';
 const geminiAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
+ * Parses a JSON string from an LLM response, robustly handling markdown code blocks.
+ * @param jsonString The raw string from the LLM.
+ * @returns The parsed JSON object.
+ * @throws An error if the JSON is invalid.
+ */
+function parseJsonFromLlmResponse(jsonString: string): any {
+    // Attempt to find JSON within markdown code blocks, which some models add.
+    const match = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const cleanedString = match ? match[1] : jsonString;
+    try {
+        return JSON.parse(cleanedString.trim());
+    } catch (e) {
+        logger.error("Failed to parse cleaned JSON from LLM response", { original: jsonString, cleaned: cleanedString, error: e });
+        // As a last resort, try parsing the original string if the cleaned one fails
+        try {
+            return JSON.parse(jsonString.trim());
+        } catch (e2) {
+            logger.error("Failed to parse original JSON from LLM response", { original: jsonString, error: e2 });
+            throw new Error('Invalid JSON response from API.');
+        }
+    }
+}
+
+
+/**
  * A helper function to standardize the handling of non-OK fetch responses.
  * It checks the response and throws a structured error if it's not successful.
  * @param response The fetch Response object.
@@ -520,7 +545,7 @@ CRITICAL: Your entire response MUST be a single, valid JSON object matching the 
         const data = await response.json();
         const content = data.choices[0]?.message?.content;
         if (!content) throw new Error('Invalid response format from API.');
-        const report = JSON.parse(content) as AiAnalysisReport;
+        const report = parseJsonFromLlmResponse(content) as AiAnalysisReport;
         logger.apiResponse('AI world analysis successful', { response: report });
         return report;
     }
@@ -735,7 +760,7 @@ Respond ONLY with a valid JSON object matching the provided schema.
       if (!content) {
         throw new Error('Invalid response format from API.');
       }
-      const profile = JSON.parse(content) as GeneratedCharacterProfile;
+      const profile = parseJsonFromLlmResponse(content) as GeneratedCharacterProfile;
       logger.apiResponse('Character profile generated successfully', {
         response: profile,
       });
@@ -1329,7 +1354,7 @@ Based on the conversation history, generate the next turn in the scene.`;
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
       if (!content) throw new Error('Invalid response format from API.');
-      const parsed = JSON.parse(content);
+      const parsed = parseJsonFromLlmResponse(content);
       if (!parsed.turn || !Array.isArray(parsed.turn))
         throw new Error('API did not return a `turn` array.');
       return parsed.turn as GroupTurnAction[];

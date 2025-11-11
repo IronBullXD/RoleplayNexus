@@ -12,25 +12,20 @@ interface State {
 }
 
 class ComponentErrorBoundary extends React.Component<Props, State> {
-  // FIX: Explicitly declare state for strict property initialization.
-  public state: State;
-
-  // FIX: Switched to constructor-based state initialization for broader compatibility and to resolve typing issues.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-    };
-    // FIX: Bind class methods in the constructor to ensure correct `this` context.
-    this.handleRetry = this.handleRetry.bind(this);
-  }
+  // FIX: Reverted state initialization to use a class property.
+  // The constructor-based initialization was causing issues with `this` context in some build environments.
+  state: State = {
+    hasError: false,
+    error: undefined,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+  // FIX: Using an arrow function for lifecycle methods ensures `this` is correctly bound.
+  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
       {
@@ -43,10 +38,13 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     );
   }
 
-  handleRetry(): void {
+  // Use arrow function for event handler to automatically bind `this`
+  handleRetry = (): void => {
     this.setState({ hasError: false, error: undefined });
   }
 
+  // FIX: Using an arrow function for render ensures `this` is correctly bound, resolving issues where 'this.props' and 'this.setState' might not be found.
+  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
   render(): ReactNode {
     if (this.state.hasError) {
       return (

@@ -41,6 +41,55 @@ const isWorldEntryCategory = (value: string): value is WorldEntryCategory => {
   return categoryOptions.includes(value as WorldEntryCategory);
 };
 
+const CustomCheckbox: React.FC<{
+  checked: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement> | React.MouseEvent) => void;
+  indeterminate?: boolean;
+  id: string;
+  label?: string;
+}> = ({ checked, onChange, indeterminate = false, id, label }) => {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative w-5 h-5 flex items-center justify-center">
+        <input
+          ref={ref}
+          type="checkbox"
+          id={id}
+          checked={checked}
+          onChange={onChange}
+          className="appearance-none w-5 h-5 border-2 border-slate-600 rounded-md checked:bg-crimson-500 checked:border-crimson-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-crimson-500 transition-colors cursor-pointer"
+        />
+        {checked && !indeterminate && (
+          <Icon
+            name="checkmark"
+            className="w-4 h-4 text-white absolute pointer-events-none"
+          />
+        )}
+        {indeterminate && (
+          <div className="w-2.5 h-1 bg-crimson-500 rounded-sm absolute pointer-events-none" />
+        )}
+      </div>
+      {label && (
+        <label
+          htmlFor={id}
+          className="text-sm font-medium text-slate-300 cursor-pointer"
+        >
+          {label}
+        </label>
+      )}
+    </div>
+  );
+};
+
+
 interface EntryEditorProps {
   entry: WorldEntry;
   allEntries: WorldEntry[];
@@ -51,55 +100,74 @@ interface EntryEditorProps {
   ) => void;
 }
 
-const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete }: {
+const EntryListItem = React.memo(({ entry, isActive, onSelect, onDelete, isSelected, onToggleSelect }: {
   entry: WorldEntry;
   isActive: boolean;
   onSelect: (id: string) => void;
   onDelete: (e: React.MouseEvent, id: string, name: string) => void;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
 }) => {
   const handleSelect = useCallback(() => onSelect(entry.id), [onSelect, entry.id]);
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(e, entry.id, entry.name || 'Unnamed Entry');
   }, [onDelete, entry.id, entry.name]);
+  const handleToggle = useCallback((e: React.MouseEvent | React.ChangeEvent) => {
+      e.stopPropagation();
+      onToggleSelect(entry.id);
+  }, [onToggleSelect, entry.id]);
 
   return (
-    <button
-      id={`entry-list-item-${entry.id}`}
-      type="button"
-      onClick={handleSelect}
-      className={`w-full text-left p-2 rounded-md flex items-center justify-between group h-full ${
-        isActive ? 'bg-crimson-600/20' : 'hover:bg-slate-800/70'
-      }`}
+    <div
+      className={`w-full flex items-center group h-full rounded-md transition-colors ${
+        isActive ? 'bg-crimson-600/20' : ''
+      } ${isSelected ? 'bg-slate-700/50' : 'hover:bg-slate-800/70'}`}
     >
-      <span
-        className={`flex-1 truncate text-sm ${
-          isActive ? 'text-crimson-300 font-semibold' : 'text-slate-300'
-        }`}
-      >
-        {entry.name || 'Unnamed Entry'}
-      </span>
-      <div className="flex items-center">
-        {!entry.enabled && (
-          <Tooltip content="Disabled" position="top">
-            <Icon
-              name="minus-square"
-              className="w-4 h-4 text-slate-500 mr-2"
-            />
-          </Tooltip>
-        )}
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover:opacity-100 focus:opacity-100"
-          aria-label={`Delete entry ${entry.name || 'Unnamed Entry'}`}
-        >
-          <Icon name="delete" className="w-4 h-4" />
-        </button>
+      <div className="p-2 cursor-pointer" onClick={handleToggle}>
+          <CustomCheckbox
+              id={`select-entry-${entry.id}`}
+              checked={isSelected}
+              onChange={() => {}} // parent div handles click
+          />
       </div>
-    </button>
+
+      <button
+          id={`entry-list-item-${entry.id}`}
+          type="button"
+          onClick={handleSelect}
+          className="flex-1 text-left py-2 flex items-center justify-between group/item min-w-0"
+      >
+          <span
+              className={`truncate text-sm ${
+                  isActive ? 'text-crimson-300 font-semibold' : 'text-slate-300'
+              }`}
+          >
+              {entry.name || 'Unnamed Entry'}
+          </span>
+          <div className="flex items-center pr-2">
+              {!entry.enabled && (
+                  <Tooltip content="Disabled" position="top">
+                  <Icon
+                      name="minus-square"
+                      className="w-4 h-4 text-slate-500 mr-2"
+                  />
+                  </Tooltip>
+              )}
+              <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="p-1 text-slate-500 hover:text-ember-400 opacity-0 group-hover/item:opacity-100 focus:opacity-100"
+                  aria-label={`Delete entry ${entry.name || 'Unnamed Entry'}`}
+              >
+                  <Icon name="delete" className="w-4 h-4" />
+              </button>
+          </div>
+      </button>
+    </div>
   );
 });
+
 
 const EntryInspectorPanel = React.memo(function EntryInspectorPanel({
   entry,
@@ -630,6 +698,8 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
   const [isSuggestionsPanelOpen, setIsSuggestionsPanelOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<ContentSuggestion[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+
 
   useEffect(() => {
     if (world) {
@@ -664,6 +734,18 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     setIsValidationPanelOpen(false);
     setValidationIssues([]);
   }, [world]);
+
+  useEffect(() => {
+    if (activeEntryId) {
+        // Use a microtask to allow the virtual list to render first
+        queueMicrotask(() => {
+            const element = document.getElementById(`entry-list-item-${activeEntryId}`);
+            if (element) {
+                element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        });
+    }
+  }, [activeEntryId]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -796,6 +878,79 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     onSave(worldToSave);
   }, [formData, onSave]);
 
+  const filteredEntries = useMemo(() => {
+    if (!entrySearch) return formData.entries || [];
+    const query = entrySearch.toLowerCase();
+    return (formData.entries || []).filter(
+      (entry) =>
+        (entry.name || '').toLowerCase().includes(query) ||
+        (entry.keys || []).some(
+          (key) => typeof key === 'string' && key.toLowerCase().includes(query),
+        ),
+    );
+  }, [formData.entries, entrySearch]);
+
+  const handleToggleEntrySelection = useCallback((entryId: string) => {
+    setSelectedEntryIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(entryId)) {
+            newSet.delete(entryId);
+        } else {
+            newSet.add(entryId);
+        }
+        return newSet;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (selectedEntryIds.size === filteredEntries.length) {
+        setSelectedEntryIds(new Set());
+    } else {
+        setSelectedEntryIds(new Set(filteredEntries.map(e => e.id)));
+    }
+  }, [selectedEntryIds.size, filteredEntries]);
+
+  const handleBulkEnable = useCallback(() => {
+    setFormData(prev => ({
+        ...prev,
+        entries: (prev.entries || []).map(entry =>
+            selectedEntryIds.has(entry.id) ? { ...entry, enabled: true } : entry
+        ),
+    }));
+    setSelectedEntryIds(new Set());
+  }, [selectedEntryIds]);
+
+  const handleBulkDisable = useCallback(() => {
+    setFormData(prev => ({
+        ...prev,
+        entries: (prev.entries || []).map(entry =>
+            selectedEntryIds.has(entry.id) ? { ...entry, enabled: false } : entry
+        ),
+    }));
+    setSelectedEntryIds(new Set());
+  }, [selectedEntryIds]);
+
+  const handleBulkDelete = useCallback(() => {
+    requestConfirmation(
+        () => {
+            setFormData(prev => {
+                const newEntries = (prev.entries || []).filter(e => !selectedEntryIds.has(e.id));
+                
+                if (activeEntryId && selectedEntryIds.has(activeEntryId)) {
+                    setActiveEntryId(newEntries[0]?.id || null);
+                }
+
+                return { ...prev, entries: newEntries };
+            });
+            setSelectedEntryIds(new Set());
+        },
+        'Delete Selected Entries',
+        `Are you sure you want to delete ${selectedEntryIds.size} selected entries? This action cannot be undone.`,
+        'Delete',
+        'danger'
+    );
+  }, [requestConfirmation, selectedEntryIds, activeEntryId]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isValidationPanelOpen && !isCheckingConsistency && !isQuickJumpOpen) onClose();
@@ -920,18 +1075,6 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     [formData.entries, activeEntryId],
   );
 
-  const filteredEntries = useMemo(() => {
-    if (!entrySearch) return formData.entries || [];
-    const query = entrySearch.toLowerCase();
-    return (formData.entries || []).filter(
-      (entry) =>
-        (entry.name || '').toLowerCase().includes(query) ||
-        (entry.keys || []).some(
-          (key) => typeof key === 'string' && key.toLowerCase().includes(query),
-        ),
-    );
-  }, [formData.entries, entrySearch]);
-
   const ITEM_HEIGHT = 36; // px
 
   type ListItem =
@@ -971,6 +1114,9 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
     containerRef: entryListRef,
   });
 
+  const allSelected = filteredEntries.length > 0 && selectedEntryIds.size === filteredEntries.length;
+  const isIndeterminate = selectedEntryIds.size > 0 && !allSelected;
+
   return (
     <>
       <motion.div
@@ -1008,7 +1154,7 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
           >
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] flex-1 overflow-hidden min-h-0">
               {/* Left Column: Navigation & Entry List */}
-              <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50 min-h-0">
+              <aside className="w-full border-r border-slate-800 flex flex-col bg-slate-900/50 min-h-0 relative">
                 <div className="p-4 border-b border-slate-800 shrink-0 space-y-4">
                     <div className="flex items-start gap-4">
                         <div className="relative group shrink-0">
@@ -1071,6 +1217,17 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                   </button>
                 </div>
                 
+                <div className="px-2 py-1 border-b border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <CustomCheckbox id="select-all-entries" checked={allSelected} indeterminate={isIndeterminate} onChange={handleToggleSelectAll} label="Select All" />
+                    {selectedEntryIds.size > 0 && (
+                        <span className="text-sm text-slate-400 font-medium">
+                            {selectedEntryIds.size} selected
+                        </span>
+                    )}
+                  </div>
+                </div>
+
                 <div ref={entryListRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar p-2 relative min-h-0">
                     {displayList.length > 0 ? (
                         <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }}>
@@ -1084,6 +1241,8 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                                             isActive={activeEntryId === item.data.id}
                                             onSelect={handleSelectEntry}
                                             onDelete={handleDeleteEntry}
+                                            isSelected={selectedEntryIds.has(item.data.id)}
+                                            onToggleSelect={handleToggleEntrySelection}
                                         />
                                     )}
                                 </div>
@@ -1096,6 +1255,24 @@ const WorldEditorPage: React.FC<WorldEditorPageProps> = ({
                          </div>
                     )}
                 </div>
+                <AnimatePresence>
+                    {selectedEntryIds.size > 0 && (
+                        <motion.div
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+                            className="shrink-0 bg-slate-800/95 backdrop-blur-sm border-t border-slate-700 p-2 flex items-center justify-between"
+                        >
+                            <p className="text-sm font-semibold text-slate-300">{selectedEntryIds.size} selected</p>
+                            <div className="flex items-center gap-2">
+                                <button type="button" onClick={handleBulkEnable} className="px-2 py-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 rounded-md hover:bg-emerald-800/50">Enable</button>
+                                <button type="button" onClick={handleBulkDisable} className="px-2 py-1 text-xs font-semibold text-amber-300 bg-amber-900/50 rounded-md hover:bg-amber-800/50">Disable</button>
+                                <button type="button" onClick={handleBulkDelete} className="px-2 py-1 text-xs font-semibold text-ember-300 bg-ember-900/50 rounded-md hover:bg-ember-800/50">Delete</button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
               </aside>
 
               {/* Center Column: Editor */}
