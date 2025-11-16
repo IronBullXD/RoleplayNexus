@@ -45,9 +45,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     window.location.reload();
   }
 
-  // FIX: Using an arrow function for render ensures `this` is correctly bound, resolving issues where 'this.props' might not be found.
-  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
-  render(): ReactNode {
+  // FIX: Use an arrow function for render to ensure `this` is correctly bound, resolving issues where 'this.props' might not be found in some build environments.
+  render = (): ReactNode => {
     if (this.state.hasError) {
       return (
         <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-4">

@@ -23,9 +23,8 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, error };
   }
 
-  // FIX: Using an arrow function for lifecycle methods ensures `this` is correctly bound.
-  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // FIX: Use an arrow function for lifecycle methods to ensure `this` is correctly bound, resolving issues where 'this.props' might not be found.
+  componentDidCatch = (error: Error, errorInfo: ErrorInfo) => {
     logger.error(
       `Error in component: ${this.props.componentName || 'Unknown'}`,
       {
@@ -43,9 +42,8 @@ class ComponentErrorBoundary extends React.Component<Props, State> {
     this.setState({ hasError: false, error: undefined });
   }
 
-  // FIX: Using an arrow function for render ensures `this` is correctly bound, resolving issues where 'this.props' and 'this.setState' might not be found.
-  // Changed to a regular class method as React binds `this` for lifecycle methods automatically.
-  render(): ReactNode {
+  // FIX: Use an arrow function for render to ensure `this` is correctly bound, resolving issues where 'this.props' and 'this.setState' might not be found.
+  render = (): ReactNode => {
     if (this.state.hasError) {
       return (
         <div className="bg-red-900/50 border border-red-500/50 rounded-lg p-4 m-4 text-red-300">

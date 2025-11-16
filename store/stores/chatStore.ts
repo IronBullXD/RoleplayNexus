@@ -915,11 +915,10 @@ export const useChatStore = create<ChatStore>()(
             const newMessages = { ...state.messages };
             messagesToDelete.forEach(id => delete newMessages[id]);
             
-            // FIX: Explicitly typing the object before spreading and deleting to help TypeScript's type inference, similar to the pattern in `deleteSession`.
+            // FIX: Re-introduced a cast that was incorrectly removed. This helps TypeScript's inference in this complex closure where the type of `characterId` was being lost.
             const characterSessions: Record<string, string[]> = state.characterSessions;
             const newCharSessions = { ...characterSessions };
-            // FIX: Remove redundant `as string` cast.
-            delete newCharSessions[characterId];
+            delete (newCharSessions as any)[characterId];
         
             return {
               sessions: newSessions,
